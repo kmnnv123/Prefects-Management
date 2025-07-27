@@ -1,4 +1,4 @@
-# 🔥 Fingerprint Data Analyzer
+# 🔥 BOP25 Prefects Management System
 
 A modern web application for analyzing prefect attendance data from Excel files with Firebase cloud storage integration.
 
