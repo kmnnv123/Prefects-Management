@@ -404,9 +404,68 @@ const STORAGE_KEYS = {
     LAST_UPDATED: 'fingerprint_last_updated'
 };
 
+// Initialize spiral button styles early
+function initializeSpiralButtonStyles() {
+    // Check if styles already exist
+    if (document.getElementById('spiralButtonStyles')) {
+        return;
+    }
+    
+    const styles = document.createElement('style');
+    styles.id = 'spiralButtonStyles';
+    styles.textContent = `
+        /* Spiral Month Selector Button - Early Loading */
+        .spiral-month-selector-container {
+            position: relative;
+        }
+        
+        .spiral-month-button {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            border: 2px solid #10b981;
+            border-radius: 12px;
+            color: #e2e8f0;
+            padding: 0.75rem 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            min-width: 160px;
+            justify-content: space-between;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);
+        }
+        
+        .spiral-month-button:hover {
+            background: linear-gradient(135deg, #10b981 0%, #065f46 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+        }
+        
+        .spiral-month-button:active {
+            transform: translateY(0px);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+        
+        @media (max-width: 768px) {
+            .spiral-month-button {
+                min-width: 140px;
+                padding: 0.625rem 1.25rem;
+                font-size: 0.8rem;
+            }
+        }
+    `;
+    
+    document.head.appendChild(styles);
+}
+
 // Wait for DOM to load before showing login
 document.addEventListener('DOMContentLoaded', async function() {
     console.log('🚀 App loaded - checking for bypass or showing login screen');
+    
+    // Initialize spiral button styles early
+    initializeSpiralButtonStyles();
     
     // Clean up any legacy password storage
     cleanupLegacyPasswordStorage();
@@ -765,18 +824,12 @@ async function executeDeleteAllData() {
         // Delete all data from Firebase Realtime Database
         await database.ref('fingerprintData').remove();
         
-        showLoading(true, 'Resetting local storage...');
+        showLoading(true, 'Resetting memory...');
         
         // Clear local data
         extractedData = [];
         allMonths = [];
         holidays = new Set();
-        
-        // Clear localStorage
-        localStorage.removeItem('fingerprintData');
-        localStorage.removeItem('extractedData');
-        localStorage.removeItem('allMonths');
-        localStorage.removeItem('holidays');
         
         showLoading(true, 'Board transition completed!');
         
@@ -786,11 +839,11 @@ async function executeDeleteAllData() {
             resultsDiv.innerHTML = '';
         }
         
-        console.log('✅ Previous board data successfully cleared - ready for new board');
+        console.log('✅ Previous board data successfully cleared from Firebase - ready for new board');
         
         setTimeout(() => {
             showLoading(false);
-            showSuccessMessage('� Database cleared! Ready for new board data.');
+            showSuccessMessage('🔄 Database cleared! Ready for new board data.');
         }, 1500);
         
     } catch (error) {
@@ -1046,12 +1099,14 @@ async function initializeApp() {
     await loadDataFromStorage();
 }
 
-// Load data from storage (Firebase first, then localStorage fallback)
+// Load data from storage (Firebase only - no localStorage fallback)
 async function loadDataFromStorage() {
     if (isFirebaseReady) {
         return await loadDataFromFirebase();
     } else {
-        return loadDataFromLocalStorage();
+        showError('Error: BOP25 Server connection required. Please check your internet connection.');
+        console.log('❌ Firebase not ready - cannot load data');
+        return false;
     }
 }
 
@@ -1126,7 +1181,10 @@ async function loadDataFromFirebase() {
         console.log('🎯 Final extractedData length:', extractedData.length);
         if (extractedData.length > 0) {
             console.log('✅ Displaying data...');
-            displayDataWithFilters();
+            // Initialize current month selection
+            initializeCurrentMonth();
+            // Display data with current month filter
+            displayDataWithFilters(currentSelectedMonth);
             showDataStatus();
             showLoading(true, 'Data loaded successfully!');
             setTimeout(() => showLoading(false), 1000);
@@ -1136,23 +1194,23 @@ async function loadDataFromFirebase() {
             setTimeout(() => showLoading(false), 2000);
         }
         
-        console.log('Data loaded from Firebase successfully');
+        console.log('✅ Data loaded from Firebase successfully');
         
     } catch (error) {
-        console.error('Error loading data from Firebase:', error);
+        console.error('❌ Error loading data from Firebase:', error);
         showLoading(false);
-        showError('Error loading data from Firebase. Trying local storage...');
-        // Fallback to localStorage
-        loadDataFromLocalStorage();
+        showError('Error: Could not load data from BOP25 Server. Please check your internet connection.');
+        throw error; // Don't fallback to localStorage
     }
 }
 
-// Save data (Firebase first, localStorage backup)
+// Save data (Firebase only - no localStorage fallback)
 async function saveDataFromStorage() {
     if (isFirebaseReady) {
         return await saveDataToFirebase();
     } else {
-        return saveDataToLocalStorage();
+        showError('Error: BOP25 Server connection required. Please check your internet connection.');
+        throw new Error('Firebase not ready - cannot save data');
     }
 }
 
@@ -1160,7 +1218,7 @@ async function saveDataFromStorage() {
 async function saveDataToFirebase() {
     try {
         showLoading(true, 'Saving data to BOP25 Server...');
-        console.log('Saving data to Firebase...');
+        console.log('🔥 Saving data to Firebase (Firebase only)...');
         
         // Prepare data for Firebase (convert Date objects to ISO strings)
         showLoading(true, 'Preparing data for BOP25 Server...');
@@ -1198,40 +1256,22 @@ async function saveDataToFirebase() {
         
         showLoading(true, 'Uploading to BOP25 Server...');
         await database.ref().update(updates);
-        console.log('Data saved to Firebase successfully');
-        
-        // Also save to localStorage as backup
-        showLoading(true, 'Creating local backup...');
-        saveDataToLocalStorage();
+        console.log('✅ Data saved to Firebase successfully - no localStorage backup created');
         
         showLoading(true, 'Save completed!');
         setTimeout(() => showLoading(false), 1000);
         
     } catch (error) {
-        console.error('Error saving data to Firebase:', error);
+        console.error('❌ Error saving data to Firebase:', error);
         showLoading(false);
-        showError('Warning: Could not save data to BOP25 Server. Saved locally instead.');
-        // Fallback to localStorage
-        saveDataToLocalStorage();
+        showError('Error: Could not save data to BOP25 Server. Please check your internet connection and try again.');
+        throw error; // Don't fallback to localStorage
     }
 }
 
-// Fallback: Save data to localStorage
-function saveDataToLocalStorage() {
-    try {
-        localStorage.setItem(STORAGE_KEYS.EXTRACTED_DATA, JSON.stringify(extractedData));
-        localStorage.setItem(STORAGE_KEYS.ALL_MONTHS, JSON.stringify(allMonths));
-        localStorage.setItem(STORAGE_KEYS.HOLIDAYS, JSON.stringify([...holidays]));
-        localStorage.setItem(STORAGE_KEYS.LAST_UPDATED, new Date().toISOString());
-        
-        console.log('Data saved to localStorage successfully');
-    } catch (error) {
-        console.error('Error saving data to localStorage:', error);
-        showError('Warning: Could not save data to browser storage.');
-    }
-}
+// Removed saveDataToLocalStorage - Firebase only storage
 
-// Show data status
+// Show data status (Firebase only)
 async function showDataStatus() {
     try {
         let lastUpdated = null;
@@ -1249,19 +1289,10 @@ async function showDataStatus() {
             }
         }
         
-        // Fallback to localStorage
-        if (!lastUpdated) {
-            const localLastUpdated = localStorage.getItem(STORAGE_KEYS.LAST_UPDATED);
-            if (localLastUpdated) {
-                lastUpdated = new Date(localLastUpdated);
-                source = 'Local Storage';
-            }
-        }
-        
         const fileName = document.getElementById('fileName');
         if (fileName && lastUpdated) {
-            const storageIcon = source === 'Firebase' ? 'bi-cloud-check' : 'bi-hdd';
-            const storageColor = source === 'Firebase' ? '#10b981' : '#f59e0b';
+            const storageIcon = 'bi-cloud-check';
+            const storageColor = '#10b981';
             
             fileName.innerHTML = `
                 <i class="bi ${storageIcon}" style="color: ${storageColor}"></i> 
@@ -1270,11 +1301,15 @@ async function showDataStatus() {
                 <button onclick="clearAllData()" class="btn btn-sm btn-outline-danger ms-2 mobile-hide" style="background: transparent; border: 1px solid #ef4444; color: #ef4444; padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.75rem;">
                     <i class="bi bi-trash"></i> Clear All Data
                 </button>
-                ${source === 'Firebase' ? 
-                    `<button onclick="syncToFirebase()" class="btn btn-sm btn-outline-success ms-2 mobile-hide" style="background: transparent; border: 1px solid #10b981; color: #10b981; padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.75rem;">
-                        <i class="bi bi-cloud-upload"></i> Sync
-                    </button>` : ''
-                }
+                <button onclick="syncToFirebase()" class="btn btn-sm btn-outline-success ms-2 mobile-hide" style="background: transparent; border: 1px solid #10b981; color: #10b981; padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.75rem;">
+                    <i class="bi bi-cloud-upload"></i> Sync
+                </button>
+            `;
+            fileName.style.display = 'block';
+        } else if (fileName) {
+            fileName.innerHTML = `
+                <i class="bi bi-exclamation-triangle" style="color: #f59e0b"></i> 
+                No data connection - Please check internet connection
             `;
             fileName.style.display = 'block';
         }
@@ -1283,15 +1318,16 @@ async function showDataStatus() {
     }
 }
 
-// Legacy function compatibility
-function saveDataToStorage() {
+// Legacy function compatibility (Firebase only)
+async function saveDataToStorage() {
     console.log('Using legacy saveDataToStorage, switching to Firebase version...');
-    return saveDataFromStorage();
+    return await saveDataFromStorage();
 }
 
-// Load data from localStorage (fallback)
-function loadDataFromStorage() {
-    return loadDataFromLocalStorage();
+// Legacy load function compatibility (Firebase only)
+async function loadDataFromLocalStorage() {
+    console.log('Using legacy loadDataFromLocalStorage, switching to Firebase version...');
+    return await loadDataFromStorage();
 }
 
 // Handle file upload from input change
@@ -1390,8 +1426,10 @@ async function mergeNewDataWithExisting() {
     await saveDataFromStorage();
     
     showLoading(true, 'Displaying results...');
-    // Display updated data
-    displayDataWithFilters();
+    // Initialize current month selection
+    initializeCurrentMonth();
+    // Display updated data with current month filter
+    displayDataWithFilters(currentSelectedMonth);
     showDataStatus();
     
     showLoading(true, 'File processed successfully!');
@@ -1462,36 +1500,47 @@ function updateMonthsList() {
     allMonths = [...monthsFromAttendance].sort();
 }
 
-// Clear all saved data
-function clearAllData() {
-    if (confirm('Are you sure you want to clear all saved data? This action cannot be undone.')) {
-        // Clear localStorage
-        Object.values(STORAGE_KEYS).forEach(key => {
-            localStorage.removeItem(key);
-        });
-        
-        // Clear memory
-        extractedData = [];
-        allMonths = [];
-        holidays = new Set();
-        
-        // Clear UI
-        const summaryDiv = document.getElementById('namesSummary');
-        if (summaryDiv) {
-            summaryDiv.remove();
+// Clear all saved data (Firebase only)
+async function clearAllData() {
+    if (confirm('Are you sure you want to clear all saved data? This action cannot be undone and will affect all users.')) {
+        try {
+            showLoading(true, 'Clearing all data from BOP25 Server...');
+            
+            // Clear Firebase data
+            if (isFirebaseReady) {
+                await database.ref('fingerprintData').remove();
+                console.log('✅ All Firebase data cleared successfully');
+            }
+            
+            // Clear memory
+            extractedData = [];
+            allMonths = [];
+            holidays = new Set();
+            
+            // Clear UI
+            const summaryDiv = document.getElementById('namesSummary');
+            if (summaryDiv) {
+                summaryDiv.remove();
+            }
+            
+            const fileName = document.getElementById('fileName');
+            if (fileName) {
+                fileName.style.display = 'none';
+            }
+            
+            showLoading(false);
+            showError('All data has been cleared from BOP25 Server.');
+            
+            // Hide error after 3 seconds
+            setTimeout(() => {
+                hideError();
+            }, 3000);
+            
+        } catch (error) {
+            console.error('❌ Error clearing data:', error);
+            showLoading(false);
+            showError('Error: Could not clear data from BOP25 Server. Please try again.');
         }
-        
-        const fileName = document.getElementById('fileName');
-        if (fileName) {
-            fileName.style.display = 'none';
-        }
-        
-        showError('All data has been cleared.');
-        
-        // Hide error after 3 seconds
-        setTimeout(() => {
-            hideError();
-        }, 3000);
     }
 }
 
@@ -1533,87 +1582,9 @@ function showError(message) {
     }
 }
 
-// Load data from localStorage
-function loadDataFromStorage() {
-    try {
-        // Load extracted data
-        const savedData = localStorage.getItem(STORAGE_KEYS.EXTRACTED_DATA);
-        if (savedData) {
-            extractedData = JSON.parse(savedData);
-            // Convert date strings back to Date objects
-            extractedData.forEach(employee => {
-                employee.attendanceData.forEach(record => {
-                    if (record.fullDate && typeof record.fullDate === 'string') {
-                        record.fullDate = new Date(record.fullDate);
-                    }
-                    if (record.startDate && typeof record.startDate === 'string') {
-                        record.startDate = new Date(record.startDate);
-                    }
-                    if (record.endDate && typeof record.endDate === 'string') {
-                        record.endDate = new Date(record.endDate);
-                    }
-                });
-            });
-        }
-        
-        // Load months
-        const savedMonths = localStorage.getItem(STORAGE_KEYS.ALL_MONTHS);
-        if (savedMonths) {
-            allMonths = JSON.parse(savedMonths);
-        }
-        
-        // Load holidays
-        const savedHolidays = localStorage.getItem(STORAGE_KEYS.HOLIDAYS);
-        if (savedHolidays) {
-            holidays = new Set(JSON.parse(savedHolidays));
-        }
-        
-        // Display data if available
-        if (extractedData.length > 0) {
-            displayDataWithFilters();
-            showDataStatus();
-        }
-        
-    } catch (error) {
-        console.error('Error loading data from storage:', error);
-        showError('Error loading saved data. Starting fresh.');
-    }
-}
+// Legacy localStorage functions removed - Firebase only storage
 
-// Save data to localStorage
-function saveDataToStorage() {
-    try {
-        localStorage.setItem(STORAGE_KEYS.EXTRACTED_DATA, JSON.stringify(extractedData));
-        localStorage.setItem(STORAGE_KEYS.ALL_MONTHS, JSON.stringify(allMonths));
-        localStorage.setItem(STORAGE_KEYS.HOLIDAYS, JSON.stringify([...holidays]));
-        localStorage.setItem(STORAGE_KEYS.LAST_UPDATED, new Date().toISOString());
-        
-        console.log('Data saved successfully');
-    } catch (error) {
-        console.error('Error saving data to storage:', error);
-        showError('Warning: Could not save data to browser storage.');
-    }
-}
-
-// Show data status
-function showDataStatus() {
-    const lastUpdated = localStorage.getItem(STORAGE_KEYS.LAST_UPDATED);
-    if (lastUpdated) {
-        const date = new Date(lastUpdated);
-        const fileName = document.getElementById('fileName');
-        if (fileName) {
-            fileName.innerHTML = `
-                <i class="bi bi-database"></i> 
-                Saved Data Available (${extractedData.length} records) - 
-                Last updated: ${date.toLocaleDateString()} ${date.toLocaleTimeString()}
-                <button onclick="clearAllData()" class="btn btn-sm btn-outline-danger ms-2 mobile-hide" style="background: transparent; border: 1px solid #ef4444; color: #ef4444; padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.75rem;">
-                    <i class="bi bi-trash"></i> Clear All Data
-                </button>
-            `;
-            fileName.style.display = 'block';
-        }
-    }
-}
+// Legacy function removed - using Firebase-only showDataStatus instead
 
 // Remove old functions that are no longer needed
 
@@ -1922,34 +1893,27 @@ function displayDataWithFilters(selectedMonth = 'all') {
                             <i class="bi bi-search search-icon"></i>
                         </div>
                         <label for="monthFilter" class="filter-label">Filter by Month:</label>
-                        <select id="monthFilter" class="filter-select" onchange="filterByMonth(this.value)">
-                            <option value="all">All Months</option>
-                            ${monthOptions}
-                        </select>
+                        <div class="spiral-month-selector-container">
+                            <button id="spiralMonthBtn" class="spiral-month-button" onclick="openSpiralMonthSelector()">
+                                <span id="selectedMonthText">All Months</span>
+                                <i class="bi bi-calendar-week"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="main-body">
                 <div class="stats-grid" data-animate="fadeInUp" data-delay="0">
                     <div class="stat-item" data-animate="fadeInUp" data-delay="0">
-                        <div class="stat-icon bg-primary">
-                            <i class="bi bi-files"></i>
-                        </div>
-                        <div class="stat-content">
-                            <h3 class="stat-number text-primary">${filteredData.length}</h3>
-                            <p class="stat-label">Total Records</p>
-                        </div>
-                    </div>
-                    <div class="stat-item" data-animate="fadeInUp" data-delay="100">
                         <div class="stat-icon bg-success">
                             <i class="bi bi-people"></i>
                         </div>
                         <div class="stat-content">
                             <h3 class="stat-number text-success">${[...new Set(filteredData.map(r => r.name))].length}</h3>
-                            <p class="stat-label">Unique Prefects</p>
+                            <p class="stat-label">Total Prefects</p>
                         </div>
                     </div>
-                    <div class="stat-item" data-animate="fadeInUp" data-delay="200">
+                    <div class="stat-item" data-animate="fadeInUp" data-delay="100">
                         <div class="stat-icon bg-info">
                             <i class="bi bi-calendar-week"></i>
                         </div>
@@ -1990,6 +1954,191 @@ function displayDataWithFilters(selectedMonth = 'all') {
                                 }
                             })()}</h3>
                             <p class="stat-label">Working Days</p>
+                        </div>
+                    </div>
+                    <div class="stat-item" data-animate="fadeInUp" data-delay="200">
+                        <div class="stat-icon ${(() => {
+                            // Calculate overall attendance status
+                            const totalPrefects = [...new Set(filteredData.map(r => r.name))].length;
+                            const workingDaysCount = (() => {
+                                if (selectedMonth === 'all') {
+                                    const allWorkingDays = new Set();
+                                    filteredData.forEach(employee => {
+                                        employee.attendanceData.forEach(record => {
+                                            const dateString = record.fullDate ? record.fullDate.toISOString().split('T')[0] : null;
+                                            const isWeekend = record.dayOfWeek === 'SAT' || record.dayOfWeek === 'SUN';
+                                            const isHolidayDate = dateString && isHoliday(dateString);
+                                            if (!isWeekend && !isHolidayDate && dateString) {
+                                                allWorkingDays.add(dateString);
+                                            }
+                                        });
+                                    });
+                                    return allWorkingDays.size;
+                                } else {
+                                    const [year, month] = selectedMonth.split('-');
+                                    const daysInMonth = new Date(year, month, 0).getDate();
+                                    let workingDays = 0;
+                                    for (let day = 1; day <= daysInMonth; day++) {
+                                        const checkDate = new Date(year, month - 1, day);
+                                        const dayOfWeek = checkDate.getDay();
+                                        const dateString = checkDate.toISOString().split('T')[0];
+                                        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                                        const isHolidayDate = isHoliday(dateString);
+                                        if (!isWeekend && !isHolidayDate) {
+                                            workingDays++;
+                                        }
+                                    }
+                                    return workingDays;
+                                }
+                            })();
+                            
+                            // Calculate attendance percentage
+                            const totalPossibleAttendances = totalPrefects * workingDaysCount;
+                            const totalActualAttendances = filteredData.length;
+                            const attendancePercentage = totalPossibleAttendances > 0 ? 
+                                (totalActualAttendances / totalPossibleAttendances) * 100 : 0;
+                            
+                            // Determine status and color
+                            if (attendancePercentage >= 90) return 'bg-excellent';
+                            if (attendancePercentage >= 80) return 'bg-good';
+                            if (attendancePercentage >= 70) return 'bg-normal';
+                            if (attendancePercentage >= 60) return 'bg-warning';
+                            return 'bg-poor';
+                        })()}">
+                            <i class="bi ${(() => {
+                                const totalPrefects = [...new Set(filteredData.map(r => r.name))].length;
+                                const workingDaysCount = (() => {
+                                    if (selectedMonth === 'all') {
+                                        const allWorkingDays = new Set();
+                                        filteredData.forEach(employee => {
+                                            employee.attendanceData.forEach(record => {
+                                                const dateString = record.fullDate ? record.fullDate.toISOString().split('T')[0] : null;
+                                                const isWeekend = record.dayOfWeek === 'SAT' || record.dayOfWeek === 'SUN';
+                                                const isHolidayDate = dateString && isHoliday(dateString);
+                                                if (!isWeekend && !isHolidayDate && dateString) {
+                                                    allWorkingDays.add(dateString);
+                                                }
+                                            });
+                                        });
+                                        return allWorkingDays.size;
+                                    } else {
+                                        const [year, month] = selectedMonth.split('-');
+                                        const daysInMonth = new Date(year, month, 0).getDate();
+                                        let workingDays = 0;
+                                        for (let day = 1; day <= daysInMonth; day++) {
+                                            const checkDate = new Date(year, month - 1, day);
+                                            const dayOfWeek = checkDate.getDay();
+                                            const dateString = checkDate.toISOString().split('T')[0];
+                                            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                                            const isHolidayDate = isHoliday(dateString);
+                                            if (!isWeekend && !isHolidayDate) {
+                                                workingDays++;
+                                            }
+                                        }
+                                        return workingDays;
+                                    }
+                                })();
+                                const totalPossibleAttendances = totalPrefects * workingDaysCount;
+                                const totalActualAttendances = filteredData.length;
+                                const attendancePercentage = totalPossibleAttendances > 0 ? 
+                                    (totalActualAttendances / totalPossibleAttendances) * 100 : 0;
+                                
+                                if (attendancePercentage >= 90) return 'bi-emoji-laughing';
+                                if (attendancePercentage >= 80) return 'bi-emoji-smile';
+                                if (attendancePercentage >= 70) return 'bi-emoji-neutral';
+                                if (attendancePercentage >= 60) return 'bi-emoji-frown';
+                                return 'bi-emoji-angry';
+                            })()}"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 class="stat-number ${(() => {
+                                const totalPrefects = [...new Set(filteredData.map(r => r.name))].length;
+                                const workingDaysCount = (() => {
+                                    if (selectedMonth === 'all') {
+                                        const allWorkingDays = new Set();
+                                        filteredData.forEach(employee => {
+                                            employee.attendanceData.forEach(record => {
+                                                const dateString = record.fullDate ? record.fullDate.toISOString().split('T')[0] : null;
+                                                const isWeekend = record.dayOfWeek === 'SAT' || record.dayOfWeek === 'SUN';
+                                                const isHolidayDate = dateString && isHoliday(dateString);
+                                                if (!isWeekend && !isHolidayDate && dateString) {
+                                                    allWorkingDays.add(dateString);
+                                                }
+                                            });
+                                        });
+                                        return allWorkingDays.size;
+                                    } else {
+                                        const [year, month] = selectedMonth.split('-');
+                                        const daysInMonth = new Date(year, month, 0).getDate();
+                                        let workingDays = 0;
+                                        for (let day = 1; day <= daysInMonth; day++) {
+                                            const checkDate = new Date(year, month - 1, day);
+                                            const dayOfWeek = checkDate.getDay();
+                                            const dateString = checkDate.toISOString().split('T')[0];
+                                            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                                            const isHolidayDate = isHoliday(dateString);
+                                            if (!isWeekend && !isHolidayDate) {
+                                                workingDays++;
+                                            }
+                                        }
+                                        return workingDays;
+                                    }
+                                })();
+                                const totalPossibleAttendances = totalPrefects * workingDaysCount;
+                                const totalActualAttendances = filteredData.length;
+                                const attendancePercentage = totalPossibleAttendances > 0 ? 
+                                    (totalActualAttendances / totalPossibleAttendances) * 100 : 0;
+                                
+                                if (attendancePercentage >= 90) return 'text-excellent';
+                                if (attendancePercentage >= 80) return 'text-good';
+                                if (attendancePercentage >= 70) return 'text-normal';
+                                if (attendancePercentage >= 60) return 'text-warning';
+                                return 'text-poor';
+                            })()}">${(() => {
+                                const totalPrefects = [...new Set(filteredData.map(r => r.name))].length;
+                                const workingDaysCount = (() => {
+                                    if (selectedMonth === 'all') {
+                                        const allWorkingDays = new Set();
+                                        filteredData.forEach(employee => {
+                                            employee.attendanceData.forEach(record => {
+                                                const dateString = record.fullDate ? record.fullDate.toISOString().split('T')[0] : null;
+                                                const isWeekend = record.dayOfWeek === 'SAT' || record.dayOfWeek === 'SUN';
+                                                const isHolidayDate = dateString && isHoliday(dateString);
+                                                if (!isWeekend && !isHolidayDate && dateString) {
+                                                    allWorkingDays.add(dateString);
+                                                }
+                                            });
+                                        });
+                                        return allWorkingDays.size;
+                                    } else {
+                                        const [year, month] = selectedMonth.split('-');
+                                        const daysInMonth = new Date(year, month, 0).getDate();
+                                        let workingDays = 0;
+                                        for (let day = 1; day <= daysInMonth; day++) {
+                                            const checkDate = new Date(year, month - 1, day);
+                                            const dayOfWeek = checkDate.getDay();
+                                            const dateString = checkDate.toISOString().split('T')[0];
+                                            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                                            const isHolidayDate = isHoliday(dateString);
+                                            if (!isWeekend && !isHolidayDate) {
+                                                workingDays++;
+                                            }
+                                        }
+                                        return workingDays;
+                                    }
+                                })();
+                                const totalPossibleAttendances = totalPrefects * workingDaysCount;
+                                const totalActualAttendances = filteredData.length;
+                                const attendancePercentage = totalPossibleAttendances > 0 ? 
+                                    (totalActualAttendances / totalPossibleAttendances) * 100 : 0;
+                                
+                                if (attendancePercentage >= 90) return 'Excellent';
+                                if (attendancePercentage >= 80) return 'Good';
+                                if (attendancePercentage >= 70) return 'Normal';
+                                if (attendancePercentage >= 60) return 'Warning';
+                                return 'Poor';
+                            })()}</h3>
+                            <p class="stat-label">Overall Status</p>
                         </div>
                     </div>
                 </div>
@@ -2253,6 +2402,48 @@ function displayDataWithFilters(selectedMonth = 'all') {
                 justify-content: center;
                 flex-shrink: 0;
                 background: linear-gradient(135deg, #10b981, #065f46);
+            }
+            
+            /* Attendance Status Background Colors */
+            .bg-excellent {
+                background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+            }
+            
+            .bg-good {
+                background: linear-gradient(135deg, #10b981, #065f46) !important;
+            }
+            
+            .bg-normal {
+                background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+            }
+            
+            .bg-warning {
+                background: linear-gradient(135deg, #f97316, #ea580c) !important;
+            }
+            
+            .bg-poor {
+                background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+            }
+            
+            /* Attendance Status Text Colors */
+            .text-excellent {
+                color: #22c55e !important;
+            }
+            
+            .text-good {
+                color: #10b981 !important;
+            }
+            
+            .text-normal {
+                color: #f59e0b !important;
+            }
+            
+            .text-warning {
+                color: #f97316 !important;
+            }
+            
+            .text-poor {
+                color: #ef4444 !important;
             }
             
             .stat-icon i {
@@ -3806,6 +3997,13 @@ function downloadCurrentDailyCSV() {
 
 // Filter data by month
 function filterByMonth(selectedMonth) {
+    console.log('🔄 filterByMonth called with:', selectedMonth);
+    // Update current selection
+    currentSelectedMonth = selectedMonth;
+    
+    // Update button text
+    updateSelectedMonthText(selectedMonth);
+    
     displayDataWithFilters(selectedMonth);
 }
 
@@ -3969,7 +4167,14 @@ function showEmployeeDetails(employeeName, selectedMonth) {
                         const isWeekend = r.dayOfWeek === 'SUN' || r.dayOfWeek === 'SAT';
                         const dateString = r.fullDate ? r.fullDate.toISOString().split('T')[0] : null;
                         const isHolidayDate = dateString && isHoliday(dateString);
-                        return !r.morning.in && !isWeekend && !isHolidayDate;
+                        
+                        // Only count days that have already passed
+                        const today = new Date();
+                        today.setHours(23, 59, 59, 999);
+                        const recordDate = r.fullDate;
+                        const hasPassed = recordDate && recordDate <= today;
+                        
+                        return !r.morning.in && !isWeekend && !isHolidayDate && hasPassed;
                     }).length}</h4>
                     <p class="summary-label">Absent Days</p>
                     <small class="summary-note">No morning entrance</small>
@@ -4374,6 +4579,14 @@ function showEmployeeDetails(employeeName, selectedMonth) {
                         <div class="attendance-container" data-animate="fadeInUp" data-delay="200">
                             ${attendanceTableHtml}
                         </div>
+                        
+                        <h6 class="section-title" data-animate="fadeInUp" data-delay="300" style="margin-top: 2rem;">
+                            <i class="bi bi-person-x me-2"></i>Absent Days ${selectedMonth !== 'all' ? `(${new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })})` : '(All Months)'}
+                        </h6>
+                        
+                        <div class="absent-container" data-animate="fadeInUp" data-delay="400">
+                            ${getAbsentDaysTable(attendanceToShow, selectedMonth)}
+                        </div>
                     </div>
                     <div class="modal-footer border-0" style="background: #1a1a1a; border-top: 1px solid #2d2d2d;">
                         <button type="button" class="btn btn-minimal btn-download" onclick="downloadEmployeeAttendance('${employeeName}', '${selectedMonth}')">
@@ -4571,6 +4784,275 @@ function showEmployeeDetails(employeeName, selectedMonth) {
     });
     
     modal.show();
+}
+
+// Generate absent days table for individual employee details
+function getAbsentDaysTable(attendanceData, selectedMonth) {
+    // Filter for absent days only (no morning entrance, excluding weekends and holidays)
+    const absentDays = attendanceData.filter(record => {
+        const isWeekend = record.dayOfWeek === 'SUN' || record.dayOfWeek === 'SAT';
+        const dateString = record.fullDate ? record.fullDate.toISOString().split('T')[0] : null;
+        const isHolidayDate = dateString && isHoliday(dateString);
+        
+        // Only count days that have already passed
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        const recordDate = record.fullDate;
+        const hasPassed = recordDate && recordDate <= today;
+        
+        return !record.morning.in && !isWeekend && !isHolidayDate && hasPassed;
+    });
+    
+    if (absentDays.length === 0) {
+        return `
+            <div class="no-absent-days">
+                <div class="text-center py-4">
+                    <i class="bi bi-check-circle-fill" style="font-size: 3rem; color: #10b981; margin-bottom: 1rem;"></i>
+                    <h5 style="color: #10b981; margin-bottom: 0.5rem;">Perfect Attendance!</h5>
+                    <p style="color: #9ca3af;">No absent days found for the selected period.</p>
+                </div>
+            </div>
+        `;
+    }
+    
+    return `
+        <div class="absent-table-wrapper">
+            <div class="absent-summary-info">
+                <div class="alert alert-warning d-flex align-items-center justify-content-between" style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); color: #f59e0b;">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <div>
+                            <strong>${absentDays.length} absent day${absentDays.length !== 1 ? 's' : ''}</strong> found ${selectedMonth !== 'all' ? 'for the selected month' : 'across all months'}
+                            (excluding weekends, holidays, and future dates)
+                        </div>
+                    </div>
+                    <button class="btn btn-sm absent-toggle-btn" onclick="toggleAbsentDetails()" style="background: transparent; border: 1px solid #f59e0b; color: #f59e0b; padding: 0.25rem 0.5rem; border-radius: 4px;">
+                        <i class="bi bi-chevron-down" id="absent-toggle-icon"></i>
+                        <span class="ms-1">Details</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="absent-details-container" id="absent-details" style="display: none;">
+            <table class="absent-table">
+                <thead>
+                    <tr>
+                        <th style="width: 15%;">#</th>
+                        <th style="width: 25%;">Date</th>
+                        <th style="width: 20%;">Day</th>
+                        <th style="width: 25%;">Month</th>
+                        <th style="width: 15%;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${absentDays.map((record, index) => {
+                        const monthYear = record.fullDate ? 
+                            record.fullDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '-';
+                        
+                        return `
+                        <tr class="absent-row" style="animation-delay: ${100 + (index * 50)}ms">
+                            <td>
+                                <span class="absent-number">${index + 1}</span>
+                            </td>
+                            <td>
+                                <span class="absent-date">${record.date}</span>
+                            </td>
+                            <td>
+                                <span class="day-display weekday">${record.dayOfWeek}</span>
+                            </td>
+                            <td>
+                                <span class="month-year">${monthYear}</span>
+                            </td>
+                            <td>
+                                <span class="status-badge status-absent">ABSENT</span>
+                            </td>
+                        </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+            </div>
+        </div>
+        
+        <style>
+            .absent-table-wrapper {
+                background: #1a1a1a;
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: 0 2px 20px rgba(0,0,0,0.3);
+                border: 1px solid #2d2d2d;
+            }
+            
+            .absent-summary-info {
+                padding: 1rem;
+                border-bottom: 1px solid #2d2d2d;
+            }
+            
+            .absent-toggle-btn {
+                transition: all 0.3s ease;
+                min-height: 44px;
+                min-width: 44px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                white-space: nowrap;
+            }
+            
+            .absent-toggle-btn:hover {
+                background: rgba(245, 158, 11, 0.1) !important;
+                transform: translateY(-1px);
+            }
+            
+            .absent-toggle-btn:focus {
+                outline: 2px solid #f59e0b;
+                outline-offset: 2px;
+            }
+            
+            .absent-details-container {
+                transition: all 0.3s ease;
+                overflow: hidden;
+            }
+            
+            .absent-table {
+                width: 100%;
+                border-collapse: collapse;
+                background: #1a1a1a;
+            }
+            
+            .absent-table thead th {
+                background: #0f0f0f;
+                color: #dc2626;
+                padding: 1rem 0.75rem;
+                text-align: left;
+                font-weight: 600;
+                font-size: 0.875rem;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                border-bottom: 2px solid #2d2d2d;
+            }
+            
+            .absent-table tbody td {
+                padding: 0.875rem 0.75rem;
+                border-bottom: 1px solid #2d2d2d;
+                background: #1a1a1a;
+                color: #e2e8f0;
+            }
+            
+            .absent-row {
+                transition: all 0.2s ease;
+                animation: slideInLeft 0.3s ease-out forwards;
+                opacity: 0;
+            }
+            
+            .absent-row:hover {
+                background: #2d2d2d !important;
+            }
+            
+            .absent-row:hover td {
+                background: #2d2d2d;
+            }
+            
+            .absent-number {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 24px;
+                height: 24px;
+                background: rgba(220, 38, 38, 0.2);
+                color: #dc2626;
+                border-radius: 50%;
+                font-size: 0.75rem;
+                font-weight: 600;
+            }
+            
+            .absent-date {
+                font-weight: 500;
+                color: #e2e8f0;
+            }
+            
+            .month-year {
+                color: #9ca3af;
+                font-size: 0.875rem;
+            }
+            
+            .status-absent {
+                background: rgba(220, 38, 38, 0.2);
+                color: #dc2626;
+                border: 1px solid rgba(220, 38, 38, 0.3);
+            }
+            
+            .no-absent-days {
+                background: #1a1a1a;
+                border-radius: 12px;
+                border: 1px solid #2d2d2d;
+                padding: 2rem;
+            }
+            
+            /* Mobile responsive */
+            @media (max-width: 480px) {
+                .absent-table {
+                    font-size: 0.75rem;
+                }
+                
+                .absent-table thead th,
+                .absent-table tbody td {
+                    padding: 0.5rem 0.25rem;
+                }
+                
+                .absent-summary-info {
+                    padding: 0.75rem;
+                }
+                
+                .alert {
+                    font-size: 0.8rem;
+                    padding: 0.75rem;
+                    flex-direction: column;
+                    gap: 0.75rem;
+                    align-items: stretch !important;
+                }
+                
+                .alert .d-flex {
+                    align-items: flex-start !important;
+                }
+                
+                .absent-toggle-btn {
+                    align-self: flex-end;
+                    padding: 0.375rem 0.75rem !important;
+                    font-size: 0.75rem !important;
+                    min-width: auto;
+                    width: auto;
+                    margin-top: 0.5rem;
+                }
+                
+                .absent-toggle-btn span {
+                    display: none;
+                }
+                
+                .month-year {
+                    font-size: 0.75rem;
+                }
+            }
+            
+            @media (max-width: 768px) and (min-width: 481px) {
+                .absent-summary-info {
+                    padding: 1rem;
+                }
+                
+                .alert {
+                    flex-direction: column;
+                    gap: 1rem;
+                    align-items: stretch !important;
+                }
+                
+                .absent-toggle-btn {
+                    align-self: flex-end;
+                    padding: 0.5rem 1rem !important;
+                    font-size: 0.875rem !important;
+                    width: auto;
+                }
+            }
+        </style>
+    `;
 }
 
 // Download detailed CSV report
@@ -6157,8 +6639,8 @@ function reverseHolidayDate(adjustedDateString) {
     return originalDateString;
 }
 
-// Toggle holiday status
-function toggleHoliday(dateString) {
+// Toggle holiday status (with auto-save to Firebase)
+async function toggleHoliday(dateString) {
     // Adjust the date by subtracting one day to fix timezone issue
     const adjustedDateString = adjustHolidayDate(dateString);
     
@@ -6193,10 +6675,19 @@ function toggleHoliday(dateString) {
     if (holidayList) {
         holidayList.innerHTML = generateHolidayList(parseInt(year), parseInt(month));
     }
+    
+    // Auto-save to Firebase
+    try {
+        await saveDataFromStorage();
+        console.log('✅ Holiday changes saved to Firebase automatically');
+    } catch (error) {
+        console.error('❌ Error auto-saving holiday changes:', error);
+        // Don't show error to user for auto-save, they can manually save later
+    }
 }
 
-// Remove specific holiday
-function removeHoliday(dateString) {
+// Remove specific holiday (with auto-save to Firebase)
+async function removeHoliday(dateString) {
     holidays.delete(dateString);
     
     // Update calendar display
@@ -6212,6 +6703,35 @@ function removeHoliday(dateString) {
     const holidayList = document.getElementById('holidayList');
     if (holidayList) {
         holidayList.innerHTML = generateHolidayList(parseInt(year), parseInt(month));
+    }
+    
+    // Auto-save to Firebase
+    try {
+        await saveDataFromStorage();
+        console.log('✅ Holiday removal saved to Firebase automatically');
+    } catch (error) {
+        console.error('❌ Error auto-saving holiday removal:', error);
+        // Don't show error to user for auto-save
+    }
+}
+
+// Toggle absent details visibility
+function toggleAbsentDetails() {
+    const detailsContainer = document.getElementById('absent-details');
+    const toggleIcon = document.getElementById('absent-toggle-icon');
+    
+    if (!detailsContainer || !toggleIcon) return;
+    
+    if (detailsContainer.style.display === 'none') {
+        // Expand
+        detailsContainer.style.display = 'block';
+        toggleIcon.classList.remove('bi-chevron-down');
+        toggleIcon.classList.add('bi-chevron-up');
+    } else {
+        // Collapse
+        detailsContainer.style.display = 'none';
+        toggleIcon.classList.remove('bi-chevron-up');
+        toggleIcon.classList.add('bi-chevron-down');
     }
 }
 
@@ -6238,34 +6758,44 @@ function updateHolidayCalendar() {
     }
 }
 
-// Save holidays function (called by Save button in modal)
-function saveHolidays() {
-    // Save holidays to storage
-    saveDataToStorage();
-    
-    // Show success feedback
-    console.log('✅ Holidays saved successfully');
-    
-    // Update any existing holiday list displays
-    const select = document.getElementById('holidayMonthSelect');
-    if (select) {
-        const [year, month] = select.value.split('-');
-        document.getElementById('holidayList').innerHTML = generateHolidayList(parseInt(year), parseInt(month));
+// Save holidays function (Firebase only)
+async function saveHolidays() {
+    try {
+        // Save holidays to Firebase
+        await saveDataFromStorage();
+        
+        // Show success feedback
+        console.log('✅ Holidays saved to Firebase successfully');
+        
+        // Update any existing holiday list displays
+        const select = document.getElementById('holidayMonthSelect');
+        if (select) {
+            const [year, month] = select.value.split('-');
+            document.getElementById('holidayList').innerHTML = generateHolidayList(parseInt(year), parseInt(month));
+        }
+    } catch (error) {
+        console.error('❌ Error saving holidays:', error);
+        showError('Error: Could not save holidays to BOP25 Server. Please check your connection.');
     }
 }
 
-// Clear all holidays
-function clearAllHolidays() {
+// Clear all holidays (Firebase only)
+async function clearAllHolidays() {
     if (confirm('Are you sure you want to clear all holidays? This action cannot be undone.')) {
-        holidays.clear();
-        
-        // Update calendar display
-        updateHolidayCalendarDisplay();
-        
-        // Save the cleared state
-        saveDataToStorage();
-        
-        console.log('✅ All holidays cleared successfully');
+        try {
+            holidays.clear();
+            
+            // Update calendar display
+            updateHolidayCalendarDisplay();
+            
+            // Save the cleared state to Firebase
+            await saveDataFromStorage();
+            
+            console.log('✅ All holidays cleared and saved to Firebase successfully');
+        } catch (error) {
+            console.error('❌ Error clearing holidays:', error);
+            showError('Error: Could not save holiday changes to BOP25 Server.');
+        }
     }
 }
 
@@ -6340,8 +6870,9 @@ function importData(event) {
                     updateMonthsList();
                     saveDataToStorage();
                     
-                    // Refresh display
-                    displayDataWithFilters();
+                    // Initialize current month and refresh display
+                    initializeCurrentMonth();
+                    displayDataWithFilters(currentSelectedMonth);
                     showDataStatus();
                     
                     showError('Data imported successfully!');
@@ -6703,7 +7234,35 @@ function showAnalysis(selectedMonth) {
             .table-wrapper {
                 max-height: 400px;
                 overflow-y: auto;
-                overflow-x: hidden;
+                overflow-x: auto;
+                border-radius: 8px;
+                border: 1px solid #2d2d2d;
+                position: relative;
+            }
+            
+            /* Scrollbar styles for table wrapper */
+            .table-wrapper::-webkit-scrollbar {
+                width: 8px;
+                height: 8px;
+            }
+            
+            .table-wrapper::-webkit-scrollbar-track {
+                background: #0a0a0a;
+                border-radius: 4px;
+            }
+            
+            .table-wrapper::-webkit-scrollbar-thumb {
+                background: #374151;
+                border-radius: 4px;
+                border: 1px solid #1f2937;
+            }
+            
+            .table-wrapper::-webkit-scrollbar-thumb:hover {
+                background: #4b5563;
+            }
+            
+            .table-wrapper::-webkit-scrollbar-corner {
+                background: #0a0a0a;
             }
             
             .minimal-table {
@@ -6942,6 +7501,23 @@ function showAnalysis(selectedMonth) {
                 .rate-label {
                     font-size: 0.5rem;
                 }
+                
+                /* Tablet Mobile Table Responsive Styles */
+                .table-wrapper {
+                    overflow-x: auto;
+                    -webkit-overflow-scrolling: touch;
+                }
+                
+                .minimal-table {
+                    min-width: 600px;
+                    font-size: 0.8rem;
+                }
+                
+                .minimal-table th,
+                .minimal-table td {
+                    padding: 10px 8px;
+                    white-space: nowrap;
+                }
             }
             
             @media (max-width: 480px) {
@@ -6972,6 +7548,44 @@ function showAnalysis(selectedMonth) {
                 
                 .rate-label {
                     font-size: 0.45rem;
+                }
+                
+                /* Mobile Table Responsive Styles */
+                .table-wrapper {
+                    max-height: 300px;
+                    overflow-x: auto;
+                    overflow-y: auto;
+                    -webkit-overflow-scrolling: touch;
+                    border-radius: 6px;
+                }
+                
+                .minimal-table {
+                    min-width: 500px;
+                    font-size: 0.75rem;
+                }
+                
+                .minimal-table th {
+                    padding: 8px 6px;
+                    font-size: 0.7rem;
+                    white-space: nowrap;
+                    min-width: 80px;
+                }
+                
+                .minimal-table td {
+                    padding: 8px 6px;
+                    font-size: 0.7rem;
+                    white-space: nowrap;
+                }
+                
+                .date-badge, .day-badge {
+                    font-size: 0.6rem;
+                    padding: 0.125rem 0.25rem;
+                }
+                
+                .count-badge {
+                    font-size: 0.6rem;
+                    padding: 0.125rem 0.25rem;
+                    min-width: 25px;
                 }
             }
             
@@ -7921,5 +8535,728 @@ function updateSearchResultIndicator(visibleCount, totalCount, searchTerm) {
     
     if (indicator) {
         indicator.style.display = 'none';
+    }
+}
+
+// Spiral Month Selector Implementation
+let currentSelectedMonth = 'all';
+let spiralModal = null;
+let isDragging = false;
+let joystickAngle = 0;
+
+// Get current month in YYYY-MM format
+function getCurrentMonth() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+}
+
+// Initialize current month selection
+function initializeCurrentMonth() {
+    const currentMonth = getCurrentMonth();
+    
+    // Check if current month has data
+    if (extractedData && extractedData.length > 0) {
+        const hasCurrentMonthData = extractedData.some(record => {
+            return record.attendanceData.some(attendance => {
+                const recordMonth = `${attendance.year}-${String(attendance.month).padStart(2, '0')}`;
+                return recordMonth === currentMonth;
+            });
+        });
+        
+        if (hasCurrentMonthData) {
+            currentSelectedMonth = currentMonth;
+            updateSelectedMonthText(currentMonth);
+            console.log(`📅 Initialized to current month: ${currentMonth}`);
+        } else {
+            // If no data for current month, keep 'all'
+            currentSelectedMonth = 'all';
+            updateSelectedMonthText('all');
+            console.log(`📅 No data for current month ${currentMonth}, showing all months`);
+        }
+    } else {
+        // No data available, default to current month anyway
+        currentSelectedMonth = getCurrentMonth();
+        updateSelectedMonthText(currentSelectedMonth);
+        console.log(`📅 No data available, defaulting to current month: ${currentSelectedMonth}`);
+    }
+}
+
+// Update the spiral month button text
+function updateSelectedMonthText(monthValue) {
+    console.log('🔄 updateSelectedMonthText called with:', monthValue);
+    const selectedMonthTextElement = document.getElementById('selectedMonthText');
+    if (!selectedMonthTextElement) {
+        console.log('❌ selectedMonthText element not found!');
+        return;
+    }
+    
+    if (monthValue === 'all') {
+        selectedMonthTextElement.textContent = 'All Months';
+        console.log('✅ Set text to: All Months');
+    } else {
+        // Convert YYYY-MM to month name
+        const monthNames = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        
+        const [year, month] = monthValue.split('-');
+        const monthIndex = parseInt(month) - 1;
+        const monthName = monthNames[monthIndex];
+        const newText = `${monthName} ${year}`;
+        selectedMonthTextElement.textContent = newText;
+        console.log(`✅ Set text to: ${newText}`);
+    }
+}
+
+function openSpiralMonthSelector() {
+    createSpiralModal();
+    document.body.appendChild(spiralModal);
+    
+    // Show modal with animation
+    setTimeout(() => {
+        spiralModal.classList.add('show');
+        initializeJoystick();
+    }, 10);
+}
+
+function createSpiralModal() {
+    // Get available months from the data
+    const availableMonths = new Set(['all']);
+    extractedData.forEach(record => {
+        record.attendanceData.forEach(attendance => {
+            if (attendance.year && attendance.month) {
+                const monthKey = `${attendance.year}-${String(attendance.month).padStart(2, '0')}`;
+                availableMonths.add(monthKey);
+            }
+        });
+    });
+    
+    // Convert to sorted array and create display data
+    const sortedMonths = Array.from(availableMonths).sort();
+    const monthsData = sortedMonths.map(monthValue => {
+        if (monthValue === 'all') {
+            return { value: 'all', display: 'All Months' };
+        } else {
+            try {
+                const date = new Date(monthValue + '-01');
+                const display = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+                return { value: monthValue, display };
+            } catch (e) {
+                return { value: monthValue, display: monthValue };
+            }
+        }
+    });
+    
+    spiralModal = document.createElement('div');
+    spiralModal.className = 'spiral-month-modal';
+    spiralModal.innerHTML = `
+        <div class="spiral-modal-backdrop" onclick="closeSpiralModal()"></div>
+        <div class="spiral-modal-content">
+            <div class="spiral-modal-header">
+                <h5><i class="bi bi-calendar-week me-2"></i>Choose Month</h5>
+                <button class="spiral-close-btn" onclick="closeSpiralModal()">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="spiral-container">
+                <div class="spiral-wheel">
+                    ${monthsData.map((monthData, index) => {
+                        const angle = (360 / monthsData.length) * index - 90; // Start from top
+                        const radius = 120;
+                        const x = Math.cos(angle * Math.PI / 180) * radius;
+                        const y = Math.sin(angle * Math.PI / 180) * radius;
+                        
+                        return `
+                            <div class="month-item ${currentSelectedMonth === monthData.value ? 'selected' : ''}" 
+                                 data-month="${monthData.value}" 
+                                 data-angle="${angle + 90}"
+                                 style="transform: translate(${x}px, ${y}px)">
+                                <span class="month-text">${monthData.display}</span>
+                                <div class="month-glow"></div>
+                            </div>
+                        `;
+                    }).join('')}
+                    <div class="joystick-container">
+                        <div class="joystick-base">
+                            <div class="joystick-stick" id="joystick">
+                                <div class="joystick-handle"></div>
+                                <div class="joystick-center-dot"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="spiral-instructions">
+                    <p><i class="bi bi-hand-index"></i>Drag the joystick to select a month</p>
+                </div>
+            </div>
+            <div class="spiral-modal-footer">
+                <button class="spiral-btn spiral-btn-secondary" onclick="closeSpiralModal()">Cancel</button>
+            </div>
+        </div>
+    `;
+    
+    // Add CSS styles
+    if (!document.getElementById('spiralSelectorStyles')) {
+        const styles = document.createElement('style');
+        styles.id = 'spiralSelectorStyles';
+        styles.textContent = `
+            /* Spiral Modal */
+            .spiral-month-modal {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 10000;
+                opacity: 0;
+                visibility: hidden;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            
+            .spiral-month-modal.show {
+                opacity: 1;
+                visibility: visible;
+            }
+            
+            .spiral-modal-backdrop {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                backdrop-filter: blur(10px);
+            }
+            
+            .spiral-modal-content {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) scale(0.9);
+                width: 90%;
+                max-width: 600px;
+                max-height: 90vh;
+                background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+                border: 2px solid #10b981;
+                border-radius: 20px;
+                box-shadow: 0 20px 60px rgba(16, 185, 129, 0.3);
+                overflow: hidden;
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            
+            .spiral-month-modal.show .spiral-modal-content {
+                transform: translate(-50%, -50%) scale(1);
+            }
+            
+            /* Modal Header */
+            .spiral-modal-header {
+                background: linear-gradient(135deg, #065f46 0%, #022c22 100%);
+                padding: 1.5rem 2rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-bottom: 2px solid #2d2d2d;
+            }
+            
+            .spiral-modal-header h5 {
+                color: #10b981;
+                margin: 0;
+                font-size: 1.25rem;
+                font-weight: 500;
+            }
+            
+            .spiral-close-btn {
+                background: none;
+                border: none;
+                color: #e2e8f0;
+                font-size: 1.25rem;
+                cursor: pointer;
+                transition: color 0.2s ease;
+                padding: 0.5rem;
+                border-radius: 6px;
+            }
+            
+            .spiral-close-btn:hover {
+                color: #10b981;
+                background: rgba(16, 185, 129, 0.1);
+            }
+            
+            /* Spiral Container */
+            .spiral-container {
+                padding: 3rem 2rem;
+                position: relative;
+                background: radial-gradient(circle at center, #1a1a1a 0%, #0a0a0a 100%);
+                min-height: 400px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-direction: column;
+                gap: 2rem;
+            }
+            
+            .spiral-wheel {
+                position: relative;
+                width: 300px;
+                height: 300px;
+                border-radius: 50%;
+                border: 2px solid #2d2d2d;
+                background: radial-gradient(circle at center, #0f0f0f 0%, #1a1a1a 100%);
+                box-shadow: 
+                    inset 0 0 30px rgba(16, 185, 129, 0.1),
+                    0 0 50px rgba(0, 0, 0, 0.5);
+            }
+            
+            /* Joystick - positioned relative to spiral-wheel */
+            .joystick-container {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                z-index: 20;
+                width: 80px;
+                height: 80px;
+            }
+            
+            .month-item {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 80px;
+                height: 40px;
+                margin: -20px -40px;
+                cursor: pointer;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                z-index: 10;
+            }
+            
+            .month-text {
+                display: block;
+                background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+                color: #e2e8f0;
+                padding: 0.5rem 0.75rem;
+                border-radius: 20px;
+                font-size: 0.75rem;
+                font-weight: 500;
+                text-align: center;
+                border: 1px solid #4b5563;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+                transition: all 0.3s ease;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            
+            .month-item:hover .month-text {
+                background: linear-gradient(135deg, #10b981 0%, #065f46 100%);
+                border-color: #059669;
+                transform: scale(1.1);
+                box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+            }
+            
+            .month-item.selected .month-text {
+                background: linear-gradient(135deg, #10b981 0%, #065f46 100%);
+                border-color: #059669;
+                color: white;
+                transform: scale(1.2);
+                box-shadow: 0 8px 25px rgba(16, 185, 129, 0.6);
+                z-index: 15;
+                position: relative;
+            }
+            
+            .month-glow {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 100px;
+                height: 50px;
+                margin: -25px -50px;
+                background: radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, transparent 70%);
+                border-radius: 50%;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+                pointer-events: none;
+            }
+            
+            .month-item.selected .month-glow {
+                opacity: 1;
+            }
+            
+            .joystick-base {
+                width: 100%;
+                height: 100%;
+                border-radius: 50%;
+                background: radial-gradient(circle at 30% 30%, #2d2d2d, #0a0a0a);
+                border: 3px solid #374151;
+                box-shadow: 
+                    inset 0 0 20px rgba(0, 0, 0, 0.5),
+                    0 0 20px rgba(16, 185, 129, 0.3);
+                position: relative;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .joystick-stick {
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                background: linear-gradient(135deg, #10b981 0%, #065f46 100%);
+                border: 2px solid #059669;
+                cursor: grab;
+                transition: all 0.2s ease;
+                box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                user-select: none;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .joystick-stick:active {
+                cursor: grabbing;
+                transform: translate(-50%, -50%) scale(0.95);
+            }
+            
+            .joystick-handle {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 20px;
+                height: 20px;
+                transform: translate(-50%, -50%);
+                border-radius: 50%;
+                background: radial-gradient(circle at 30% 30%, #a7f3d0, #10b981);
+                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+            }
+            
+            .joystick-center-dot {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 4px;
+                height: 4px;
+                transform: translate(-50%, -50%);
+                border-radius: 50%;
+                background: #065f46;
+                box-shadow: 0 0 4px rgba(6, 95, 70, 0.8);
+            }
+                border-radius: 50%;
+                background: #065f46;
+                box-shadow: 0 0 4px rgba(6, 95, 70, 0.8);
+            }
+            
+            /* Instructions */
+            .spiral-instructions {
+                text-align: center;
+                color: #94a3b8;
+                font-size: 0.875rem;
+                margin-top: 1rem;
+            }
+            
+            .spiral-instructions i {
+                color: #10b981;
+                margin-right: 0.5rem;
+            }
+            
+            /* Modal Footer */
+            .spiral-modal-footer {
+                background: #0a0a0a;
+                padding: 1.5rem 2rem;
+                border-top: 1px solid #2d2d2d;
+                display: flex;
+                justify-content: flex-end;
+                gap: 1rem;
+            }
+            
+            .spiral-btn {
+                padding: 0.75rem 1.5rem;
+                border-radius: 8px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                border: none;
+                font-size: 0.875rem;
+            }
+            
+            .spiral-btn-secondary {
+                background: #374151;
+                color: #e2e8f0;
+                border: 1px solid #4b5563;
+            }
+            
+            .spiral-btn-secondary:hover {
+                background: #4b5563;
+            }
+            
+            .spiral-btn-primary {
+                background: linear-gradient(135deg, #10b981 0%, #065f46 100%);
+                color: white;
+                border: 1px solid #059669;
+            }
+            
+            .spiral-btn-primary:hover {
+                background: linear-gradient(135deg, #059669 0%, #047857 100%);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            }
+            
+            /* Mobile Responsive */
+            @media (max-width: 768px) {
+                .spiral-modal-content {
+                    width: 95%;
+                    max-height: 95vh;
+                }
+                
+                .spiral-container {
+                    padding: 2rem 1rem;
+                    min-height: 350px;
+                }
+                
+                .spiral-wheel {
+                    width: 250px;
+                    height: 250px;
+                }
+                
+                .month-item {
+                    width: 70px;
+                    height: 35px;
+                    margin: -17.5px -35px;
+                }
+                
+                .month-text {
+                    font-size: 0.6875rem;
+                    padding: 0.375rem 0.5rem;
+                }
+                
+                .joystick-container {
+                    width: 60px;
+                    height: 60px;
+                }
+                
+                .joystick-base {
+                    width: 100%;
+                    height: 100%;
+                }
+                
+                .joystick-stick {
+                    width: 40px;
+                    height: 40px;
+                }
+                
+                .spiral-modal-header {
+                    padding: 1rem 1.5rem;
+                }
+                
+                .spiral-modal-footer {
+                    padding: 1rem 1.5rem;
+                    flex-direction: column;
+                }
+                
+                .spiral-btn {
+                    width: 100%;
+                }
+            }
+        `;
+        document.head.appendChild(styles);
+    }
+}
+
+function initializeJoystick() {
+    const joystick = document.getElementById('joystick');
+    const joystickBase = joystick.parentElement;
+    const monthItems = document.querySelectorAll('.month-item');
+    
+    let startX, startY, joystickRect, baseRect;
+    const maxDistance = 25; // Maximum distance joystick can move from center
+    
+    function startDrag(e) {
+        isDragging = true;
+        joystick.style.cursor = 'grabbing';
+        
+        // Get positions
+        baseRect = joystickBase.getBoundingClientRect();
+        joystickRect = joystick.getBoundingClientRect();
+        
+        // Get initial mouse/touch position
+        const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+        const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+        
+        startX = clientX - baseRect.left - baseRect.width / 2;
+        startY = clientY - baseRect.top - baseRect.height / 2;
+        
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', stopDrag);
+        document.addEventListener('touchmove', drag, { passive: false });
+        document.addEventListener('touchend', stopDrag);
+        
+        e.preventDefault();
+    }
+    
+    function drag(e) {
+        if (!isDragging) return;
+        
+        e.preventDefault();
+        
+        const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+        const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+        
+        // Calculate movement
+        let deltaX = clientX - baseRect.left - baseRect.width / 2;
+        let deltaY = clientY - baseRect.top - baseRect.height / 2;
+        
+        // Limit movement within base
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        if (distance > maxDistance) {
+            deltaX = (deltaX / distance) * maxDistance;
+            deltaY = (deltaY / distance) * maxDistance;
+        }
+        
+        // Apply movement (maintain centering transform)
+        joystick.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+        
+        // Calculate angle
+        joystickAngle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
+        if (joystickAngle < 0) joystickAngle += 360;
+        
+        // Normalize angle to start from top (subtract 90 degrees)
+        let normalizedAngle = (joystickAngle + 90) % 360;
+        
+        // Find closest month
+        const monthCount = monthItems.length;
+        const anglePerMonth = 360 / monthCount;
+        const closestMonthIndex = Math.round(normalizedAngle / anglePerMonth) % monthCount;
+        
+        // Update selection
+        monthItems.forEach((item, index) => {
+            item.classList.toggle('selected', index === closestMonthIndex);
+        });
+    }
+    
+    function stopDrag() {
+        isDragging = false;
+        joystick.style.cursor = 'grab';
+        
+        document.removeEventListener('mousemove', drag);
+        document.removeEventListener('mouseup', stopDrag);
+        document.removeEventListener('touchmove', drag);
+        document.removeEventListener('touchend', stopDrag);
+        
+        // Snap to selected position
+        const selectedMonth = document.querySelector('.month-item.selected');
+        if (selectedMonth) {
+            const targetAngle = parseFloat(selectedMonth.dataset.angle) - 90;
+            const targetX = Math.cos(targetAngle * Math.PI / 180) * 15;
+            const targetY = Math.sin(targetAngle * Math.PI / 180) * 15;
+            
+            joystick.style.transform = `translate(calc(-50% + ${targetX}px), calc(-50% + ${targetY}px))`;
+            
+            // Auto-select the month immediately when joystick is released
+            setTimeout(() => {
+                const monthValue = selectedMonth.dataset.month;
+                console.log('🕹️ Joystick released - monthValue:', monthValue);
+                
+                // DIRECT UPDATE: Force update the button text immediately
+                const selectedMonthTextElement = document.getElementById('selectedMonthText');
+                if (selectedMonthTextElement && monthValue !== 'all') {
+                    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                    const [year, month] = monthValue.split('-');
+                    const monthIndex = parseInt(month) - 1;
+                    const monthName = monthNames[monthIndex];
+                    selectedMonthTextElement.textContent = `${monthName} ${year}`;
+                    console.log(`🔄 DIRECT UPDATE: Set button text to ${monthName} ${year}`);
+                }
+                
+                // Update current selection and apply filter
+                currentSelectedMonth = monthValue;
+                filterByMonth(monthValue);
+                
+                // Close modal
+                closeSpiralModal();
+            }, 200); // Small delay for smooth animation
+        } else {
+            // Return to center if no selection
+            joystick.style.transform = `translate(-50%, -50%)`;
+        }
+    }
+    
+    // Add event listeners
+    joystick.addEventListener('mousedown', startDrag);
+    joystick.addEventListener('touchstart', startDrag, { passive: false });
+    
+    // Add click handlers for month items
+    monthItems.forEach(item => {
+        item.addEventListener('click', () => {
+            monthItems.forEach(m => m.classList.remove('selected'));
+            item.classList.add('selected');
+            
+            // Move joystick to this position
+            const targetAngle = parseFloat(item.dataset.angle) - 90;
+            const targetX = Math.cos(targetAngle * Math.PI / 180) * 15;
+            const targetY = Math.sin(targetAngle * Math.PI / 180) * 15;
+            
+            joystick.style.transform = `translate(calc(-50% + ${targetX}px), calc(-50% + ${targetY}px))`;
+            
+            // Auto-select the month immediately when clicked
+            setTimeout(() => {
+                const monthValue = item.dataset.month;
+                console.log('👆 Month clicked - monthValue:', monthValue);
+                
+                // DIRECT UPDATE: Force update the button text immediately
+                const selectedMonthTextElement = document.getElementById('selectedMonthText');
+                if (selectedMonthTextElement && monthValue !== 'all') {
+                    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                    const [year, month] = monthValue.split('-');
+                    const monthIndex = parseInt(month) - 1;
+                    const monthName = monthNames[monthIndex];
+                    selectedMonthTextElement.textContent = `${monthName} ${year}`;
+                    console.log(`🔄 DIRECT UPDATE: Set button text to ${monthName} ${year}`);
+                }
+                
+                // Update current selection and apply filter
+                currentSelectedMonth = monthValue;
+                filterByMonth(monthValue);
+                
+                // Close modal
+                closeSpiralModal();
+            }, 200); // Small delay for smooth animation
+        });
+    });
+}
+
+function closeSpiralModal() {
+    if (spiralModal) {
+        spiralModal.classList.remove('show');
+        setTimeout(() => {
+            if (spiralModal && spiralModal.parentNode) {
+                spiralModal.parentNode.removeChild(spiralModal);
+            }
+            spiralModal = null;
+        }, 300);
+    }
+}
+
+function confirmMonthSelection() {
+    const selectedMonth = document.querySelector('.month-item.selected');
+    if (selectedMonth) {
+        const monthValue = selectedMonth.dataset.month;
+        const monthText = selectedMonth.querySelector('.month-text').textContent;
+        
+        // Update button text
+        document.getElementById('selectedMonthText').textContent = monthText;
+        
+        // Update current selection
+        currentSelectedMonth = monthValue;
+        
+        // Apply filter
+        filterByMonth(monthValue);
+        
+        // Close modal
+        closeSpiralModal();
     }
 }

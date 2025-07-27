@@ -216,6 +216,22 @@ function initializeAttendanceCalendar(availableDates, resultsDivId) {
         `;
         
         calendarContainer.innerHTML = calendarHtml;
+        
+        // Add smooth fade-in animation for calendar days
+        requestAnimationFrame(() => {
+            const calendarDays = calendarContainer.querySelectorAll('.calendar-day');
+            calendarDays.forEach((day, index) => {
+                day.style.opacity = '0';
+                day.style.transform = 'translateY(10px)';
+                day.style.transition = `all 0.3s cubic-bezier(0.4, 0, 0.2, 1)`;
+                
+                // Stagger the animation for each day
+                setTimeout(() => {
+                    day.style.opacity = '1';
+                    day.style.transform = 'translateY(0)';
+                }, index * 8); // Small delay between each day
+            });
+        });
     }
     
     // Store calendar state globally for navigation
@@ -258,9 +274,18 @@ function selectCalendarDate(dateStr, resultsDivId) {
     const calendar = document.getElementById('attendanceCalendar');
     
     if (calendar.classList.contains('calendar-expanded')) {
+        // Add selection feedback animation
+        clickedElement.style.transition = 'all 0.2s ease';
+        clickedElement.style.transform = 'scale(0.95)';
+        
+        setTimeout(() => {
+            clickedElement.style.transform = 'scale(1)';
+        }, 100);
+        
+        // Smooth collapse after selection
         setTimeout(() => {
             collapseCalendar();
-        }, 400); // Small delay to show selection animation
+        }, 600); // Increased delay for better UX
     }
 }
 
@@ -271,19 +296,38 @@ function toggleCalendarView() {
     const toggleIcon = toggleBtn.querySelector('i');
     
     if (calendar.classList.contains('calendar-collapsed')) {
-        // Show calendar
+        // Show calendar with smooth animation
+        calendar.style.transition = 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+        calendar.style.transform = 'translateY(-10px)';
+        calendar.style.opacity = '0';
+        
         calendar.classList.remove('calendar-collapsed');
         calendar.classList.add('calendar-expanded');
-        toggleIcon.className = 'bi bi-x-lg';
-        toggleBtn.classList.add('active');
-        toggleBtn.title = 'Close Calendar';
         
-        // Add a subtle animation effect
+        // Animate the toggle button icon
+        toggleIcon.style.transition = 'transform 0.3s ease';
+        toggleIcon.style.transform = 'rotate(180deg)';
+        
+        // Start the smooth reveal animation
+        requestAnimationFrame(() => {
+            calendar.style.transform = 'translateY(0)';
+            calendar.style.opacity = '1';
+        });
+        
+        // Update button state after a short delay
         setTimeout(() => {
-            calendar.style.boxShadow = '0 8px 30px rgba(16, 185, 129, 0.15)';
-        }, 200);
+            toggleIcon.className = 'bi bi-x-lg';
+            toggleIcon.style.transform = 'rotate(0deg)';
+            toggleBtn.classList.add('active');
+            toggleBtn.title = 'Close Calendar';
+        }, 150);
+        
+        // Add enhanced shadow effect
+        setTimeout(() => {
+            calendar.style.boxShadow = '0 12px 40px rgba(16, 185, 129, 0.2), 0 4px 16px rgba(16, 185, 129, 0.1)';
+        }, 300);
     } else {
-        // Hide calendar
+        // Hide calendar with smooth animation
         collapseCalendar();
     }
 }
@@ -294,12 +338,32 @@ function collapseCalendar() {
     const toggleBtn = document.getElementById('calendarToggleBtn');
     const toggleIcon = toggleBtn.querySelector('i');
     
-    calendar.classList.remove('calendar-expanded');
-    calendar.classList.add('calendar-collapsed');
-    toggleIcon.className = 'bi bi-calendar';
-    toggleBtn.classList.remove('active');
-    toggleBtn.title = 'Toggle Calendar';
+    // Start smooth collapse animation
+    calendar.style.transition = 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+    calendar.style.transform = 'translateY(-10px)';
+    calendar.style.opacity = '0';
     calendar.style.boxShadow = 'none';
+    
+    // Animate the toggle button icon
+    toggleIcon.style.transition = 'transform 0.3s ease';
+    toggleIcon.style.transform = 'rotate(-180deg)';
+    
+    // Update button state
+    setTimeout(() => {
+        toggleIcon.className = 'bi bi-calendar';
+        toggleIcon.style.transform = 'rotate(0deg)';
+        toggleBtn.classList.remove('active');
+        toggleBtn.title = 'Toggle Calendar';
+    }, 150);
+    
+    // Complete the collapse after animation
+    setTimeout(() => {
+        calendar.classList.remove('calendar-expanded');
+        calendar.classList.add('calendar-collapsed');
+        calendar.style.transform = '';
+        calendar.style.opacity = '';
+        calendar.style.transition = '';
+    }, 400);
 }
 
 // Load today's attendance on initial load
