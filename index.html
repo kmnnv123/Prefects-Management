@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fingerprint Data Analyzer</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="1prefects logo.png">
+    <link rel="shortcut icon" type="image/png" href="1prefects logo.png">
+    <link rel="apple-touch-icon" href="1prefects logo.png">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#10b981">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="BOP25">
+    <meta name="msapplication-TileColor" content="#10b981">
+    <meta name="msapplication-TileImage" content="1prefects logo.png">
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    <!-- Firebase SDKs (Compat version - easier to use) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    
+    <!-- Excel processing library -->
+    <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <style>
+        /* Mobile-First Global Styles */
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 1rem;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            color: #e2e8f0;
+        }
+        
+        .container-fluid {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0;
+        }
+        
+        /* Upload Section Mobile Styles */
+        .upload-section {
+            background: #1a1a1a;
+            border: 1px solid #2d2d2d;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            text-align: center;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+        }
+        
+        .logo-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .logo-circle {
+            width: 80px;
+            height: 80px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            border: 2px solid #10b981;
+        }
+        
+        .logo-image {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+        }
+        
+        .upload-title {
+            font-size: 1.75rem;
+            font-weight: 300;
+            color: #10b981;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .upload-subtitle {
+            color: #9ca3af;
+            margin-bottom: 2rem;
+            font-size: 1rem;
+        }
+        
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .file-input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        
+        .file-input-button {
+            background: linear-gradient(135deg, #10b981, #065f46);
+            color: white;
+            border: 1px solid #065f46;
+            border-radius: 12px;
+            padding: 1rem 2rem;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+        
+        .file-input-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+        }
+        
+        .file-name {
+            margin-top: 1rem;
+            font-size: 0.875rem;
+            color: #a7f3d0;
+            padding: 0.5rem 1rem;
+            background: #1a1a1a;
+            border-radius: 8px;
+            border: 1px solid #2d2d2d;
+        }
+        
+        /* Results Section */
+        #results {
+            margin-top: 1rem;
+        }
+        
+        /* Modal Daily Attendance Styles */
+        .modal-daily-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #2d2d2d;
+        }
+        
+        .modal-daily-title h5 {
+            color: #e2e8f0;
+            font-weight: 300;
+            margin-bottom: 0.5rem;
+        }
+        
+        .modal-daily-title p {
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+        
+        .modal-daily-stats {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            border: 1px solid #3d3d3d;
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            min-width: 120px;
+            flex: 1;
+            max-width: 200px;
+        }
+        
+        .stat-card.present {
+            border-color: #10b981;
+            background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+        }
+        
+        .stat-card.percentage {
+            border-color: #f59e0b;
+            background: linear-gradient(135deg, #92400e 0%, #b45309 100%);
+        }
+        
+        .stat-number {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #e2e8f0;
+            margin-bottom: 0.25rem;
+        }
+        
+        .stat-label {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .modal-attendance-table-container {
+            background: #1a1a1a;
+            border-radius: 8px;
+            border: 1px solid #2d2d2d;
+            overflow: hidden;
+        }
+        
+        .modal-attendance-table {
+            margin-bottom: 0;
+            color: #e2e8f0;
+        }
+        
+        .modal-attendance-table thead th {
+            background: #0f0f0f;
+            border-color: #2d2d2d;
+            color: #10b981;
+            font-weight: 500;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.75rem;
+        }
+        
+        .modal-attendance-table tbody td {
+            background: #1a1a1a;
+            border-color: #2d2d2d;
+            padding: 0.75rem;
+            font-size: 0.875rem;
+        }
+        
+        .attendance-row:hover td {
+            background: #2d2d2d;
+        }
+        
+        .attendance-row.present {
+            border-left: 3px solid #10b981;
+        }
+        
+        .attendance-row.absent {
+            border-left: 3px solid #ef4444;
+        }
+        
+        .row-number {
+            color: #6b7280;
+            font-weight: 500;
+        }
+        
+        .employee-name {
+            font-weight: 500;
+            color: #e2e8f0;
+        }
+        
+        .employee-position {
+            color: #94a3b8;
+            font-size: 0.8rem;
+        }
+        
+        .time-cell {
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            color: #cbd5e1;
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .status-badge.present {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+        
+        .status-badge.absent {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+        
+        .modal-no-data {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 300px;
+            text-align: center;
+        }
+        
+        .no-data-content {
+            max-width: 300px;
+        }
+        
+        .no-data-icon {
+            font-size: 3rem;
+            color: #6b7280;
+            margin-bottom: 1rem;
+        }
+        
+        .no-data-title {
+            color: #e2e8f0;
+            font-weight: 300;
+            margin-bottom: 0.5rem;
+        }
+        
+        .no-data-subtitle {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Mobile Responsive Adjustments */
+        @media (max-width: 480px) {
+            body {
+                padding: 0.5rem;
+            }
+            
+            .logo-circle {
+                width: 60px;
+                height: 60px;
+            }
+            
+            .logo-image {
+                width: 45px;
+                height: 45px;
+            }
+            
+            .upload-section {
+                border-radius: 16px;
+                padding: 1.5rem;
+                margin-bottom: 1rem;
+            }
+            
+            .upload-title {
+                font-size: 1.5rem;
+                text-align: center;
+                justify-content: center;
+            }
+            
+            .upload-subtitle {
+                font-size: 0.875rem;
+                margin-bottom: 1.5rem;
+            }
+            
+            .file-input-button {
+                padding: 0.875rem 1.5rem;
+                font-size: 0.875rem;
+                border-radius: 10px;
+            }
+            
+            .file-name {
+                font-size: 0.75rem;
+                padding: 0.375rem 0.75rem;
+            }
+            
+            /* Modal Daily Stats Mobile */
+            .modal-daily-stats {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+            
+            .stat-card {
+                min-width: auto;
+                max-width: none;
+                padding: 0.75rem;
+            }
+            
+            .stat-number {
+                font-size: 1.25rem;
+            }
+            
+            .stat-label {
+                font-size: 0.6875rem;
+            }
+        }
+        
+        @media (min-width: 481px) and (max-width: 768px) {
+            .upload-section {
+                padding: 1.75rem;
+            }
+            
+            .upload-title {
+                font-size: 1.625rem;
+            }
+        }
+        
+        /* Loading and Error States */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            color: #4a5568;
+            margin-top: 1rem;
+        }
+        
+        .spinner {
+            border: 2px solid #e2e8f0;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+        }
+        
+        .error-message {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            border: 1px solid #feb2b2;
+        }
+        
+        /* Button Styles */
+        .btn-minimal {
+            border: none;
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        
+        .btn-download {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: 1px solid #059669;
+        }
+        
+        .btn-secondary {
+            background: #374151;
+            color: #10b981;
+            border: 1px solid #374151;
+        }
+        
+        .btn-danger {
+            background: #dc2626;
+            color: white;
+            border: 1px solid #dc2626;
+        }
+        
+        .btn-danger:hover {
+            background: #b91c1c;
+            border-color: #b91c1c;
+            color: white;
+        }
+        
+        .import-section {
+            margin-top: 1rem;
+        }
+        
+        .import-section .btn-minimal {
+            padding: 0.75rem 1.5rem;
+            font-size: 0.875rem;
+            border: 1px solid #2d2d2d;
+            background: transparent;
+            color: #a7f3d0;
+        }
+        
+        .import-section .btn-minimal:hover {
+            background: #1a1a1a;
+            border-color: #10b981;
+            color: #10b981;
+        }
+        
+        .btn-minimal:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        
+        /* Additional Utility Classes */
+        .text-center { text-align: center; }
+        .mb-3 { margin-bottom: 1rem; }
+        .mt-3 { margin-top: 1rem; }
+        
+        /* Login Screen Styles */
+        .login-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .login-container {
+            background: #1a1a1a;
+            border: 2px solid #10b981;
+            border-radius: 20px;
+            padding: 3rem 2rem;
+            max-width: 450px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(16, 185, 129, 0.3);
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+        
+        .login-title {
+            font-size: 1.75rem;
+            font-weight: 300;
+            color: #10b981;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .login-subtitle {
+            color: #9ca3af;
+            margin-bottom: 2rem;
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+        
+        .login-form {
+            margin-bottom: 2rem;
+        }
+        
+        .password-input-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .login-password-input {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid #374151;
+            border-radius: 12px;
+            background: #0a0a0a;
+            color: #e2e8f0;
+            font-size: 1rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .login-password-input:focus {
+            outline: none;
+            border-color: #10b981;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+        }
+        
+        .login-button {
+            background: linear-gradient(135deg, #10b981, #065f46);
+            color: white;
+            border: 1px solid #065f46;
+            border-radius: 12px;
+            padding: 1rem 2rem;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+        
+        .login-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+        }
+        
+        .login-error {
+            background: #dc2626;
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+            animation: shake 0.5s ease-in-out;
+        }
+        
+        .login-footer {
+            color: #6b7280;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .install-app-btn {
+            background: linear-gradient(135deg, #10b981, #065f46);
+            color: white;
+            border: 1px solid #065f46;
+            border-radius: 12px;
+            padding: 0.875rem 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            margin-top: 1rem;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+        
+        .install-app-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+            background: linear-gradient(135deg, #059669, #047857);
+        }
+        
+        .offline-message {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            border: 1px solid #d97706;
+            border-radius: 12px;
+            padding: 0.875rem 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            margin-top: 1rem;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+        }
+        
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 2rem 1.5rem;
+                border-radius: 16px;
+            }
+            
+            .login-title {
+                font-size: 1.5rem;
+            }
+            
+            .login-subtitle {
+                font-size: 0.875rem;
+            }
+            
+            .login-password-input, .login-button {
+                padding: 0.875rem;
+                font-size: 0.875rem;
+            }
+        }
+        
+        /* Ensure proper touch targets on mobile */
+        @media (max-width: 768px) {
+            button, .btn, input[type="file"] + label {
+                min-height: 44px;
+                min-width: 44px;
+            }
+        }
+        
+        /* Daily Attendance Controls */
+        .daily-controls {
+            margin-top: 2rem;
+            background: #1a1a1a;
+            border: 1px solid #2d2d2d;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .controls-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .controls-title {
+            color: #10b981;
+            font-size: 1.25rem;
+            font-weight: 500;
+            margin: 0;
+        }
+        
+        .controls-actions {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+        
+        /* Daily Attendance Modal Styles */
+        .daily-attendance-modal {
+            background: #0a0a0a;
+            border: none;
+        }
+        
+        .daily-attendance-modal .modal-content {
+            background: #1a1a1a;
+            border: 1px solid #2d2d2d;
+        }
+        
+        .daily-modal-header {
+            background: linear-gradient(135deg, #065f46 0%, #022c22 100%);
+            border-bottom: 1px solid #2d2d2d;
+            color: #10b981;
+        }
+        
+        .daily-modal-body {
+            background: #1a1a1a;
+            color: #e2e8f0;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .daily-modal-footer {
+            background: #1a1a1a;
+            border-top: 1px solid #2d2d2d;
+        }
+        
+        /* Calendar in Modal */
+        .modal-calendar-container {
+            background: #0f0f0f;
+            border: 1px solid #2d2d2d;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .modal-calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #2d2d2d;
+        }
+        
+        .modal-calendar-title {
+            color: #10b981;
+            font-size: 1.125rem;
+            font-weight: 500;
+            margin: 0;
+        }
+        
+        /* Calendar Styles */
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #2d2d2d;
+        }
+        
+        .calendar-navigation {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .calendar-month-year {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        
+        .month-selector, .year-selector {
+            background: #0a0a0a;
+            border: 1px solid #2d2d2d;
+            color: #e2e8f0;
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }
+        
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            background: #2d2d2d;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .calendar-day-header {
+            background: #0f0f0f;
+            color: #10b981;
+            padding: 0.75rem 0.5rem;
+            font-weight: 500;
+            font-size: 0.75rem;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .calendar-day {
+            background: #1a1a1a;
+            color: #e2e8f0;
+            padding: 0.75rem 0.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .calendar-day:hover {
+            background: #2d2d2d;
+        }
+        
+        .calendar-day.today {
+            background: #065f46;
+            color: #a7f3d0;
+            font-weight: 600;
+        }
+        
+        .calendar-day.has-data {
+            background: #10b981;
+            color: white;
+            font-weight: 500;
+        }
+        
+        .calendar-day.has-data:hover {
+            background: #059669;
+        }
+        
+        .calendar-day.other-month {
+            color: #6b7280;
+            background: #0f0f0f;
+        }
+        
+        .calendar-day.holiday {
+            background: #10b981 !important;
+            color: white;
+            border: 2px solid #059669 !important;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+            position: relative;
+        }
+        
+        .holiday-icon {
+            color: white !important;
+            font-size: 0.6rem;
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            z-index: 10;
+        }
+        
+        /* Holiday list badge styling */
+        .badge.bg-success {
+            color: white !important;
+        }
+        
+        .badge.bg-success .btn-close {
+            color: white !important;
+            opacity: 1;
+        }
+        
+        .calendar-day.future-date {
+            color: #4b5563;
+            cursor: not-allowed;
+        }
+        
+        .calendar-day.attendance-high {
+            background: #10b981;
+        }
+        
+        .calendar-day.attendance-moderate {
+            background: #f59e0b;
+        }
+        
+        .calendar-day.attendance-low {
+            background: #ef4444;
+        }
+        
+        .calendar-day.selected {
+            background: #065f46 !important;
+            color: #a7f3d0 !important;
+            border: 2px solid #10b981 !important;
+            font-weight: 600;
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+        
+        @media (max-width: 768px) {
+            .controls-header {
+                flex-direction: column;
+                align-items: stretch;
+                text-align: center;
+            }
+            
+            .controls-actions {
+                justify-content: center;
+            }
+            
+            .calendar-day {
+                padding: 0.5rem 0.25rem;
+                font-size: 0.75rem;
+                min-height: 35px;
+            }
+            
+            .calendar-day-header {
+                padding: 0.5rem 0.25rem;
+                font-size: 0.625rem;
+            }
+            
+            .btn-text {
+                display: none;
+            }
+            
+            .daily-attendance-modal .modal-dialog {
+                margin: 0.5rem;
+                max-width: none;
+            }
+            
+            .modal-calendar-container {
+                padding: 1rem;
+            }
+        }
+        
+        /* Splash Screen Styles */
+        .splash-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            opacity: 1;
+            transition: opacity 1s ease-out;
+        }
+        
+        .splash-screen.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .splash-logo {
+            margin-bottom: 2rem;
+            animation: fadeInUp 1s ease-out;
+        }
+        
+        .splash-logo img {
+            width: 150px;
+            height: 150px;
+            object-fit: contain;
+            border-radius: 20px;
+        }
+        
+        .splash-title {
+            font-size: 2.5rem;
+            font-weight: 300;
+            color: #10b981;
+            margin-bottom: 1rem;
+            text-align: center;
+            animation: fadeInUp 1s ease-out 0.3s both;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        .splash-subtitle {
+            font-size: 1.2rem;
+            color: #9ca3af;
+            text-align: center;
+            animation: fadeInUp 1s ease-out 0.6s both;
+            margin-bottom: 3rem;
+        }
+        
+        .splash-loader {
+            width: 50px;
+            height: 4px;
+            background: #2d2d2d;
+            border-radius: 2px;
+            overflow: hidden;
+            animation: fadeInUp 1s ease-out 0.9s both;
+        }
+        
+        .splash-loader::after {
+            content: '';
+            display: block;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #065f46);
+            border-radius: 2px;
+            animation: loading 2s ease-in-out infinite;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes loading {
+            0% { transform: translateX(-100%); }
+            50% { transform: translateX(0%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        @media (max-width: 480px) {
+            .splash-logo img {
+                width: 120px;
+                height: 120px;
+            }
+            
+            .splash-title {
+                font-size: 2rem;
+            }
+            
+            .splash-subtitle {
+                font-size: 1rem;
+                padding: 0 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <!-- Splash Screen -->
+        <div id="splashScreen" class="splash-screen">
+            <div class="splash-logo">
+                <img src="Picture1.png" alt="School Logo">
+            </div>
+            <h1 class="splash-title">Board of Prefects 25</h1>
+            <p class="splash-subtitle">Fingerprint Data Management System</p>
+            <div class="splash-loader"></div>
+        </div>
+        
+        <!-- Login Screen -->
+        <div id="loginScreen" class="login-screen" style="display: none;">
+            <div class="login-container">
+                <div class="logo-container">
+                    <div class="logo-circle">
+                        <img src="1prefects logo.png" alt="Prefects Logo" class="logo-image">
+                    </div>
+                </div>
+                
+                <h1 class="login-title">
+                    <i class="bi bi-shield-lock"></i>
+                    <span>BOP25 Access Control</span>
+                </h1>
+                <p class="login-subtitle">Enter your board admin password to access the system</p>
+                
+                <div class="login-form">
+                    <div class="password-input-wrapper">
+                        <input 
+                            type="password" 
+                            id="loginPassword" 
+                            placeholder="Enter board admin password"
+                            class="login-password-input"
+                            onkeypress="if(event.key==='Enter') attemptLogin()"
+                        >
+                        <button onclick="attemptLogin()" class="login-button">
+                            <i class="bi bi-unlock"></i>
+                            <span>Access System</span>
+                        </button>
+                    </div>
+                    <div id="loginError" class="login-error" style="display: none;"></div>
+                </div>
+                
+                <div class="login-footer">
+                    <p><i class="bi bi-info-circle"></i> Authorized personnel only</p>
+                </div>
+                
+                <!-- Install Mobile App Button -->
+                <button id="installAppBtn" class="install-app-btn" onclick="installMobileApp()">
+                    <i class="bi bi-download"></i>
+                    <span>Install Mobile App</span>
+                </button>
+                
+                <!-- Offline Message -->
+                <div id="offlineMessage" class="offline-message" style="display: none;">
+                    <i class="bi bi-wifi-off"></i>
+                    <span>Please connect to internet to access the system</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main App (Initially Hidden) -->
+        <div id="mainApp" style="display: none;">
+        <!-- Upload Section -->
+        <div class="upload-section">
+            <div class="logo-container">
+                <div class="logo-circle">
+                    <img src="1prefects logo.png" alt="Prefects Logo" class="logo-image">
+                </div>
+            </div>
+            
+            <h1 class="upload-title">
+                <i class="bi bi-fingerprint"></i>
+                <span>Fingerprint Data Analyzer</span>
+            </h1>
+            <p class="upload-subtitle mobile-hide">Upload your Excel file to analyze prefect attendance data</p>
+            
+            <div class="file-input-wrapper mobile-hide">
+                <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls" onchange="handleFileUpload(event)">
+                <label for="fileInput" class="file-input-button">
+                    <i class="bi bi-cloud-upload"></i>
+                    <span>Choose Excel File</span>
+                </label>
+            </div>
+            
+            <div class="import-section mobile-hide">
+                <input type="file" id="importInput" class="file-input" accept=".json" onchange="importData(event)" style="display: none;">
+                <button onclick="document.getElementById('importInput').click()" class="btn-minimal btn-secondary">
+                    <i class="bi bi-upload"></i>
+                    <span>Import Backup Data</span>
+                </button>
+                
+                <button onclick="testFirebaseConnection()" class="btn-minimal btn-secondary" style="margin-left: 10px;">
+                    <i class="bi bi-cloud-check"></i>
+                    <span>Test BOP25 Server</span>
+                </button>
+                
+                <button onclick="confirmDeleteAllData()" class="btn-minimal btn-danger" style="margin-left: 10px;">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    <span>New Board Reset</span>
+                </button>
+                
+                <button onclick="changePassword()" class="btn-minimal btn-secondary" style="margin-left: 10px;">
+                    <i class="bi bi-key"></i>
+                    <span>Change Password</span>
+                </button>
+            </div>
+            
+            <div id="fileName" class="file-name" style="display: none;"></div>
+            <div id="loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <span>Processing file...</span>
+            </div>
+            <div id="error" class="error-message" style="display: none;"></div>
+        </div>
+        
+        <!-- Results Section -->
+        <div id="results">
+        </div>
+        </div> <!-- End Main App -->
+    </div>
+
+    <!-- Bootstrap JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- SheetJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <!-- Splash Screen Script -->
+    <script>
+        // Show splash screen on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Show splash screen for 3 seconds
+            setTimeout(function() {
+                const splashScreen = document.getElementById('splashScreen');
+                const loginScreen = document.getElementById('loginScreen');
+                
+                // Fade out splash screen
+                splashScreen.classList.add('fade-out');
+                
+                // Show login screen after fade out completes
+                setTimeout(function() {
+                    splashScreen.style.display = 'none';
+                    loginScreen.style.display = 'flex';
+                    
+                    // Check connectivity after login screen shows
+                    checkConnectivityStatus();
+                }, 1000); // Wait for fade-out animation to complete
+                
+            }, 3000); // Show splash for 3 seconds
+        });
+        
+        // Check connectivity and local data
+        function checkConnectivityStatus() {
+            const offlineMessage = document.getElementById('offlineMessage');
+            const loginForm = document.querySelector('.login-form');
+            const installBtn = document.getElementById('installAppBtn');
+            
+            // Check if online
+            if (!navigator.onLine) {
+                console.log('🌐 Offline: No internet connection');
+                
+                // Check if there's any local data (simplified check)
+                const hasLocalData = localStorage.getItem('fingerprint_data') || 
+                                   localStorage.getItem('prefect_rankings') ||
+                                   sessionStorage.length > 0;
+                
+                if (!hasLocalData) {
+                    console.log('💾 No local data available');
+                    // Show offline message and dim login form
+                    if (offlineMessage) {
+                        offlineMessage.style.display = 'flex';
+                    }
+                    if (loginForm) {
+                        loginForm.style.opacity = '0.5';
+                        loginForm.style.pointerEvents = 'none';
+                    }
+                    if (installBtn) {
+                        installBtn.style.opacity = '0.5';
+                        installBtn.style.pointerEvents = 'none';
+                    }
+                } else {
+                    console.log('💾 Local data available, allowing offline access');
+                }
+            } else {
+                console.log('🌐 Online: Internet connection available');
+                // Hide offline message and enable form
+                if (offlineMessage) {
+                    offlineMessage.style.display = 'none';
+                }
+                if (loginForm) {
+                    loginForm.style.opacity = '1';
+                    loginForm.style.pointerEvents = 'auto';
+                }
+                if (installBtn) {
+                    installBtn.style.opacity = '1';
+                    installBtn.style.pointerEvents = 'auto';
+                }
+            }
+        }
+        
+        // Listen for online/offline events
+        window.addEventListener('online', checkConnectivityStatus);
+        window.addEventListener('offline', checkConnectivityStatus);
+    </script>
+    
+    <!-- PWA Installation Script -->
+    <script>
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((registration) => {
+                        console.log('📱 PWA: Service Worker registered successfully');
+                    })
+                    .catch((error) => {
+                        console.log('📱 PWA: Service Worker registration failed:', error);
+                    });
+            });
+        }
+
+        // PWA Install Management
+        let deferredInstallPrompt = null;
+        let installButtonVisible = false;
+        
+        // Capture the install prompt but allow browser banner initially
+        window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('📱 PWA: Install prompt available');
+            
+            // Only prevent default if our button is visible and user hasn't interacted
+            const installBtn = document.getElementById('installAppBtn');
+            if (installBtn && installBtn.style.display !== 'none') {
+                e.preventDefault();
+                deferredInstallPrompt = e;
+                console.log('📱 PWA: Install prompt captured for custom button');
+            } else {
+                // Let browser show its own install banner
+                console.log('📱 PWA: Allowing browser install banner');
+            }
+        });
+        
+        // Install function for our custom button
+        function installMobileApp() {
+            console.log('📱 Custom install button clicked');
+            
+            if (deferredInstallPrompt) {
+                deferredInstallPrompt.prompt();
+                deferredInstallPrompt.userChoice.then((choiceResult) => {
+                    console.log('📱 User choice:', choiceResult.outcome);
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('📱 User accepted the install prompt');
+                        hideInstallButton();
+                    } else {
+                        console.log('📱 User dismissed the install prompt');
+                    }
+                    deferredInstallPrompt = null;
+                });
+            } else {
+                // Fallback - show instructions
+                showInstallInstructions();
+            }
+        }
+        
+        function showInstallInstructions() {
+            const instructions = `To install this app:
+
+🔵 Chrome/Edge: 
+• Look for install icon (⊕) in address bar
+• Or use menu → "Install BOP25..."
+
+🟠 Firefox:
+• Menu → "Install this site as an app"
+
+🍎 Safari (iPhone/iPad):
+• Tap Share button (📤)
+• Select "Add to Home Screen"
+
+📱 Android:
+• Menu → "Add to Home screen"`;
+            
+            alert(instructions);
+        }
+        
+        function hideInstallButton() {
+            const installBtn = document.getElementById('installAppBtn');
+            if (installBtn) {
+                installBtn.style.display = 'none';
+                console.log('📱 Install button hidden');
+            }
+        }
+        
+        // Hide install button if already installed
+        window.addEventListener('appinstalled', () => {
+            console.log('📱 PWA: App was installed successfully');
+            hideInstallButton();
+        });
+        
+        // Check if already installed and hide button
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                // Temporarily disabled auto-hide for testing
+                // if (window.navigator.standalone === true || 
+                //     window.matchMedia('(display-mode: standalone)').matches ||
+                //     window.matchMedia('(display-mode: minimal-ui)').matches) {
+                //     console.log('📱 PWA: App is already installed');
+                //     hideInstallButton();
+                // } else {
+                    console.log('📱 PWA: Install button kept visible for testing');
+                // }
+            }, 1000); // Wait for login screen to show
+        });
+    </script>
+    
+    <!-- Calendar Module -->
+    <script src="calendar.js"></script>
+    
+    <!-- Main Application Script -->
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Login - BOP25</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            color: white;
+            padding: 2rem;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .debug-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #1a1a1a;
+            border: 2px solid #10b981;
+            border-radius: 20px;
+            padding: 2rem;
+        }
+        input, button {
+            width: 100%;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border-radius: 8px;
+            border: 1px solid #374151;
+            background: #0a0a0a;
+            color: white;
+            font-size: 1rem;
+        }
+        button {
+            background: linear-gradient(135deg, #10b981, #065f46);
+            cursor: pointer;
+            border: 1px solid #065f46;
+        }
+        .result {
+            background: #374151;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            word-break: break-all;
+        }
+        .success { background: #065f46; }
+        .error { background: #dc2626; }
+    </style>
+</head>
+<body>
+    <div class="debug-container">
+        <h1>🔧 BOP25 Login Debug Tool</h1>
+        <p>Use this tool to debug login issues on GitHub Pages</p>
+        
+        <h3>Test Password Authentication</h3>
+        <input type="password" id="testPassword" placeholder="Enter password to test" value="PrefectsAdmin2025!">
+        <button onclick="testPasswordHash()">Test Password Hash</button>
+        
+        <h3>Current Default Password</h3>
+        <div class="result">
+            <strong>Default Password:</strong> PrefectsAdmin2025!<br>
+            <strong>Expected Hash:</strong> f16d847d2182c5d0be13cf3263a4898c2849e96c9beb04b9694258b0d7eb080e
+        </div>
+        
+        <h3>Test Results</h3>
+        <div id="results"></div>
+        
+        <h3>Environment Check</h3>
+        <button onclick="checkEnvironment()">Check Browser Environment</button>
+        
+        <h3>Quick Login (Bypass)</h3>
+        <button onclick="directLogin()">Direct Login (Skip Authentication)</button>
+        
+        <h3>Reset Password</h3>
+        <input type="password" id="newPassword" placeholder="Enter new password">
+        <button onclick="setNewPassword()">Set New Password (Firebase)</button>
+        
+        <h3>Firebase Password Management</h3>
+        <button onclick="checkFirebasePassword()">Check Firebase Password</button>
+        <button onclick="resetToDefault()">Reset to Default Password</button>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAFuBQuONd5MOd0xYzQTMruhMIvfWWVquk",
+            authDomain: "prefect-s-attendance.firebaseapp.com",
+            databaseURL: "https://prefect-s-attendance-default-rtdb.firebaseio.com",
+            projectId: "prefect-s-attendance",
+            storageBucket: "prefect-s-attendance.appspot.com",
+            messagingSenderId: "346459404604",
+            appId: "1:346459404604:web:0474e89dd17bb5a7b95b06"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        
+        async function hashPassword(password) {
+            try {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(password);
+                const hash = await crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hash));
+                const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                return hashHex;
+            } catch (error) {
+                return 'ERROR: ' + error.message;
+            }
+        }
+
+        async function testPasswordHash() {
+            const password = document.getElementById('testPassword').value;
+            const results = document.getElementById('results');
+            
+            if (!password) {
+                results.innerHTML = '<div class="result error">Please enter a password</div>';
+                return;
+            }
+            
+            const hash = await hashPassword(password);
+            const expectedHash = 'f16d847d2182c5d0be13cf3263a4898c2849e96c9beb04b9694258b0d7eb080e';
+            
+            // Get Firebase password hash
+            let storedHash = expectedHash;
+            try {
+                const snapshot = await firebase.database().ref('system/adminPassword').once('value');
+                storedHash = snapshot.val() || expectedHash;
+            } catch (error) {
+                console.error('Error getting Firebase password:', error);
+            }
+            
+            const isMatch = hash === expectedHash;
+            const isStoredMatch = hash === storedHash;
+            
+            results.innerHTML = `
+                <div class="result">
+                    <strong>Entered Password:</strong> ${password}<br>
+                    <strong>Generated Hash:</strong> ${hash}<br>
+                    <strong>Expected Hash:</strong> ${expectedHash}<br>
+                    <strong>Stored Hash:</strong> ${storedHash}<br>
+                    <strong>Matches Expected:</strong> <span class="${isMatch ? 'success' : 'error'}">${isMatch ? 'YES ✅' : 'NO ❌'}</span><br>
+                    <strong>Matches Stored:</strong> <span class="${isStoredMatch ? 'success' : 'error'}">${isStoredMatch ? 'YES ✅' : 'NO ❌'}</span>
+                </div>
+            `;
+        }
+
+        function checkEnvironment() {
+            const results = document.getElementById('results');
+            const isHttps = location.protocol === 'https:';
+            const hasCryptoSubtle = !!window.crypto?.subtle;
+            const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+            const isGithubPages = location.hostname.includes('github.io');
+            
+            results.innerHTML = `
+                <div class="result">
+                    <strong>Environment Check:</strong><br>
+                    <strong>Protocol:</strong> ${location.protocol}<br>
+                    <strong>Hostname:</strong> ${location.hostname}<br>
+                    <strong>Is HTTPS:</strong> <span class="${isHttps ? 'success' : 'error'}">${isHttps ? 'YES ✅' : 'NO ❌'}</span><br>
+                    <strong>Has crypto.subtle:</strong> <span class="${hasCryptoSubtle ? 'success' : 'error'}">${hasCryptoSubtle ? 'YES ✅' : 'NO ❌'}</span><br>
+                    <strong>Is Localhost:</strong> ${isLocalhost ? 'YES' : 'NO'}<br>
+                    <strong>Is GitHub Pages:</strong> ${isGithubPages ? 'YES' : 'NO'}<br>
+                    <strong>localStorage available:</strong> <span class="${!!window.localStorage ? 'success' : 'error'}">${!!window.localStorage ? 'YES ✅' : 'NO ❌'}</span>
+                </div>
+            `;
+        }
+
+        function directLogin() {
+            // Redirect to main app with a bypass flag
+            const url = new URL(window.location);
+            url.searchParams.set('bypass', 'true');
+            window.location.href = url.toString();
+        }
+
+        async function setNewPassword() {
+            const newPassword = document.getElementById('newPassword').value;
+            const results = document.getElementById('results');
+            
+            if (!newPassword) {
+                results.innerHTML = '<div class="result error">Please enter a new password</div>';
+                return;
+            }
+            
+            try {
+                const newHash = await hashPassword(newPassword);
+                await firebase.database().ref('system/adminPassword').set(newHash);
+                
+                results.innerHTML = `
+                    <div class="result success">
+                        <strong>New Password Set Successfully in Firebase!</strong><br>
+                        <strong>Password:</strong> ${newPassword}<br>
+                        <strong>Hash:</strong> ${newHash}<br>
+                        Now try logging in with this password.
+                    </div>
+                `;
+            } catch (error) {
+                results.innerHTML = `
+                    <div class="result error">
+                        <strong>Error setting password:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        async function checkFirebasePassword() {
+            const results = document.getElementById('results');
+            
+            try {
+                const snapshot = await firebase.database().ref('system/adminPassword').once('value');
+                const storedHash = snapshot.val();
+                const defaultHash = 'f16d847d2182c5d0be13cf3263a4898c2849e96c9beb04b9694258b0d7eb080e';
+                
+                results.innerHTML = `
+                    <div class="result">
+                        <strong>Firebase Password Check:</strong><br>
+                        <strong>Hash in Firebase:</strong> ${storedHash || 'Not set'}<br>
+                        <strong>Default Hash:</strong> ${defaultHash}<br>
+                        <strong>Is Default:</strong> ${storedHash === defaultHash ? 'YES' : 'NO'}<br>
+                        <strong>Database Status:</strong> ${storedHash ? 'Password exists' : 'No password set'}
+                    </div>
+                `;
+            } catch (error) {
+                results.innerHTML = `
+                    <div class="result error">
+                        <strong>Firebase Error:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        async function resetToDefault() {
+            const results = document.getElementById('results');
+            
+            try {
+                const defaultHash = 'f16d847d2182c5d0be13cf3263a4898c2849e96c9beb04b9694258b0d7eb080e';
+                await firebase.database().ref('system/adminPassword').set(defaultHash);
+                
+                results.innerHTML = `
+                    <div class="result success">
+                        <strong>Reset to Default Password Complete!</strong><br>
+                        <strong>Default Password:</strong> PrefectsAdmin2025!<br>
+                        <strong>Hash:</strong> ${defaultHash}<br>
+                        Try logging in with "PrefectsAdmin2025!"
+                    </div>
+                `;
+            } catch (error) {
+                results.innerHTML = `
+                    <div class="result error">
+                        <strong>Error resetting password:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Auto-run environment check on load
+        window.addEventListener('load', () => {
+            checkEnvironment();
+            setTimeout(checkFirebasePassword, 1000); // Check Firebase after 1 second
+        });
+    </script>
+</body>
+</html>
