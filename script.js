@@ -1298,12 +1298,6 @@ async function showDataStatus() {
                 <i class="bi ${storageIcon}" style="color: ${storageColor}"></i> 
                 ${source} Data (${extractedData.length} records) - 
                 Last updated: ${lastUpdated.toLocaleDateString()} ${lastUpdated.toLocaleTimeString()}
-                <button onclick="clearAllData()" class="btn btn-sm btn-outline-danger ms-2 mobile-hide" style="background: transparent; border: 1px solid #ef4444; color: #ef4444; padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.75rem;">
-                    <i class="bi bi-trash"></i> Clear All Data
-                </button>
-                <button onclick="syncToFirebase()" class="btn btn-sm btn-outline-success ms-2 mobile-hide" style="background: transparent; border: 1px solid #10b981; color: #10b981; padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.75rem;">
-                    <i class="bi bi-cloud-upload"></i> Sync
-                </button>
             `;
             fileName.style.display = 'block';
         } else if (fileName) {
@@ -1328,6 +1322,19 @@ async function saveDataToStorage() {
 async function loadDataFromLocalStorage() {
     console.log('Using legacy loadDataFromLocalStorage, switching to Firebase version...');
     return await loadDataFromStorage();
+}
+
+// Sync to Firebase function (manually trigger save)
+async function syncToFirebase() {
+    try {
+        console.log('🔄 Manual sync to Firebase initiated...');
+        await saveDataFromStorage();
+        console.log('✅ Manual sync completed successfully');
+        showSuccessMessage('Data synced to BOP25 Server successfully!');
+    } catch (error) {
+        console.error('❌ Manual sync failed:', error);
+        showError('Failed to sync data to BOP25 Server. Please check your internet connection.');
+    }
 }
 
 // Handle file upload from input change
@@ -1895,7 +1902,17 @@ function displayDataWithFilters(selectedMonth = 'all') {
                         <label for="monthFilter" class="filter-label">Filter by Month:</label>
                         <div class="spiral-month-selector-container">
                             <button id="spiralMonthBtn" class="spiral-month-button" onclick="openSpiralMonthSelector()">
-                                <span id="selectedMonthText">All Months</span>
+                                <span id="selectedMonthText">${(() => {
+                                    if (selectedMonth === 'all') {
+                                        return 'All Months';
+                                    } else {
+                                        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                                        const [year, month] = selectedMonth.split('-');
+                                        const monthIndex = parseInt(month) - 1;
+                                        const monthName = monthNames[monthIndex];
+                                        return `${monthName} ${year}`;
+                                    }
+                                })()}</span>
                                 <i class="bi bi-calendar-week"></i>
                             </button>
                         </div>
@@ -8587,10 +8604,21 @@ function initializeCurrentMonth() {
 function updateSelectedMonthText(monthValue) {
     console.log('🔄 updateSelectedMonthText called with:', monthValue);
     const selectedMonthTextElement = document.getElementById('selectedMonthText');
+    
+    // Debug: Check if element exists
+    console.log('🔍 selectedMonthText element:', selectedMonthTextElement);
+    console.log('🔍 Element exists:', !!selectedMonthTextElement);
+    
     if (!selectedMonthTextElement) {
-        console.log('❌ selectedMonthText element not found!');
+        console.log('❌ selectedMonthText element not found! Checking DOM...');
+        // Try to find any elements with spiral text
+        const spiralElements = document.querySelectorAll('[id*="Month"], [class*="month"], [id*="spiral"]');
+        console.log('🔍 Found spiral-related elements:', spiralElements);
         return;
     }
+    
+    // Log current text before changing
+    console.log('📝 Current text:', selectedMonthTextElement.textContent);
     
     if (monthValue === 'all') {
         selectedMonthTextElement.textContent = 'All Months';
@@ -8609,11 +8637,43 @@ function updateSelectedMonthText(monthValue) {
         selectedMonthTextElement.textContent = newText;
         console.log(`✅ Set text to: ${newText}`);
     }
+    
+    // Verify the change
+    console.log('🔍 Text after update:', selectedMonthTextElement.textContent);
+}
+
+// Test function to check if selectedMonthText element exists and can be updated
+function testSelectedMonthText() {
+    console.log('🧪 Testing selectedMonthText element...');
+    const element = document.getElementById('selectedMonthText');
+    console.log('Element found:', !!element);
+    console.log('Element:', element);
+    if (element) {
+        console.log('Current text:', element.textContent);
+        element.textContent = 'TEST UPDATE WORKS!';
+        console.log('After test update:', element.textContent);
+        // Reset after 2 seconds
+        setTimeout(() => {
+            element.textContent = 'All Months';
+            console.log('Reset to All Months');
+        }, 2000);
+    } else {
+        console.log('Element not found! Searching for similar elements...');
+        const allElements = document.querySelectorAll('*');
+        const matchingElements = Array.from(allElements).filter(el => 
+            el.id.includes('month') || el.className.includes('month') || 
+            el.textContent.includes('Month') || el.textContent.includes('All')
+        );
+        console.log('Similar elements:', matchingElements);
+    }
 }
 
 function openSpiralMonthSelector() {
     createSpiralModal();
     document.body.appendChild(spiralModal);
+    
+    // Prevent body scroll when modal is open
+    document.body.style.overflow = 'hidden';
     
     // Show modal with animation
     setTimeout(() => {
@@ -8623,8 +8683,10 @@ function openSpiralMonthSelector() {
 }
 
 function createSpiralModal() {
-    // Get available months from the data
+    // Get available months from the data only (no test months)
     const availableMonths = new Set(['all']);
+    
+    // Only add months from actual data
     extractedData.forEach(record => {
         record.attendanceData.forEach(attendance => {
             if (attendance.year && attendance.month) {
@@ -8638,11 +8700,12 @@ function createSpiralModal() {
     const sortedMonths = Array.from(availableMonths).sort();
     const monthsData = sortedMonths.map(monthValue => {
         if (monthValue === 'all') {
-            return { value: 'all', display: 'All Months' };
+            return { value: 'all', display: 'All' };
         } else {
             try {
                 const date = new Date(monthValue + '-01');
-                const display = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+                // Use short month name only (no year)
+                const display = date.toLocaleString('default', { month: 'short' });
                 return { value: monthValue, display };
             } catch (e) {
                 return { value: monthValue, display: monthValue };
@@ -8652,6 +8715,14 @@ function createSpiralModal() {
     
     spiralModal = document.createElement('div');
     spiralModal.className = 'spiral-month-modal';
+    
+    // Calculate dynamic sizing based on number of months
+    const numMonths = monthsData.length;
+    const baseRadius = Math.max(120, 80 + (numMonths * 8));
+    const radius = Math.min(baseRadius, 180);
+    const wheelSize = (radius * 2) + 100; // Add padding around the wheel
+    const modalWidth = Math.max(wheelSize + 100, 400); // Ensure minimum modal width
+    
     spiralModal.innerHTML = `
         <div class="spiral-modal-backdrop" onclick="closeSpiralModal()"></div>
         <div class="spiral-modal-content">
@@ -8665,7 +8736,9 @@ function createSpiralModal() {
                 <div class="spiral-wheel">
                     ${monthsData.map((monthData, index) => {
                         const angle = (360 / monthsData.length) * index - 90; // Start from top
-                        const radius = 120;
+                        // Dynamic radius based on number of items
+                        const baseRadius = Math.max(120, 80 + (monthsData.length * 8));
+                        const radius = Math.min(baseRadius, 180); // Cap at 180px
                         const x = Math.cos(angle * Math.PI / 180) * radius;
                         const y = Math.sin(angle * Math.PI / 180) * radius;
                         
@@ -8714,11 +8787,13 @@ function createSpiralModal() {
                 opacity: 0;
                 visibility: hidden;
                 transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                pointer-events: none;
             }
             
             .spiral-month-modal.show {
                 opacity: 1;
                 visibility: visible;
+                pointer-events: auto;
             }
             
             .spiral-modal-backdrop {
@@ -8729,6 +8804,7 @@ function createSpiralModal() {
                 height: 100%;
                 background: rgba(0, 0, 0, 0.8);
                 backdrop-filter: blur(10px);
+                pointer-events: auto;
             }
             
             .spiral-modal-content {
@@ -8737,7 +8813,7 @@ function createSpiralModal() {
                 left: 50%;
                 transform: translate(-50%, -50%) scale(0.9);
                 width: 90%;
-                max-width: 600px;
+                max-width: ${modalWidth}px;
                 max-height: 90vh;
                 background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
                 border: 2px solid #10b981;
@@ -8745,6 +8821,7 @@ function createSpiralModal() {
                 box-shadow: 0 20px 60px rgba(16, 185, 129, 0.3);
                 overflow: hidden;
                 transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                pointer-events: auto;
             }
             
             .spiral-month-modal.show .spiral-modal-content {
@@ -8789,7 +8866,7 @@ function createSpiralModal() {
                 padding: 3rem 2rem;
                 position: relative;
                 background: radial-gradient(circle at center, #1a1a1a 0%, #0a0a0a 100%);
-                min-height: 400px;
+                min-height: ${Math.max(400, wheelSize + 100)}px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -8799,8 +8876,8 @@ function createSpiralModal() {
             
             .spiral-wheel {
                 position: relative;
-                width: 300px;
-                height: 300px;
+                width: ${wheelSize}px;
+                height: ${wheelSize}px;
                 border-radius: 50%;
                 border: 2px solid #2d2d2d;
                 background: radial-gradient(circle at center, #0f0f0f 0%, #1a1a1a 100%);
@@ -8824,9 +8901,9 @@ function createSpiralModal() {
                 position: absolute;
                 top: 50%;
                 left: 50%;
-                width: 80px;
-                height: 40px;
-                margin: -20px -40px;
+                width: ${numMonths <= 5 ? '70px' : '60px'};
+                height: ${numMonths <= 5 ? '35px' : '30px'};
+                margin: ${numMonths <= 5 ? '-17.5px -35px' : '-15px -30px'};
                 cursor: pointer;
                 transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
                 z-index: 10;
@@ -8836,9 +8913,9 @@ function createSpiralModal() {
                 display: block;
                 background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
                 color: #e2e8f0;
-                padding: 0.5rem 0.75rem;
-                border-radius: 20px;
-                font-size: 0.75rem;
+                padding: ${numMonths <= 5 ? '0.375rem 0.625rem' : '0.25rem 0.5rem'};
+                border-radius: 15px;
+                font-size: ${numMonths <= 5 ? '0.75rem' : '0.7rem'};
                 font-weight: 500;
                 text-align: center;
                 border: 1px solid #4b5563;
@@ -9019,19 +9096,19 @@ function createSpiralModal() {
                 }
                 
                 .spiral-wheel {
-                    width: 250px;
-                    height: 250px;
+                    width: ${Math.min(wheelSize * 0.8, 280)}px;
+                    height: ${Math.min(wheelSize * 0.8, 280)}px;
                 }
                 
                 .month-item {
-                    width: 70px;
-                    height: 35px;
-                    margin: -17.5px -35px;
+                    width: ${numMonths <= 5 ? '55px' : '45px'};
+                    height: ${numMonths <= 5 ? '28px' : '23px'};
+                    margin: ${numMonths <= 5 ? '-14px -27.5px' : '-11.5px -22.5px'};
                 }
                 
                 .month-text {
-                    font-size: 0.6875rem;
-                    padding: 0.375rem 0.5rem;
+                    font-size: ${numMonths <= 5 ? '0.65rem' : '0.6rem'};
+                    padding: ${numMonths <= 5 ? '0.25rem 0.45rem' : '0.2rem 0.4rem'};
                 }
                 
                 .joystick-container {
@@ -9163,13 +9240,18 @@ function initializeJoystick() {
                 
                 // DIRECT UPDATE: Force update the button text immediately
                 const selectedMonthTextElement = document.getElementById('selectedMonthText');
-                if (selectedMonthTextElement && monthValue !== 'all') {
-                    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                    const [year, month] = monthValue.split('-');
-                    const monthIndex = parseInt(month) - 1;
-                    const monthName = monthNames[monthIndex];
-                    selectedMonthTextElement.textContent = `${monthName} ${year}`;
-                    console.log(`🔄 DIRECT UPDATE: Set button text to ${monthName} ${year}`);
+                if (selectedMonthTextElement) {
+                    if (monthValue === 'all') {
+                        selectedMonthTextElement.textContent = 'All Months';
+                        console.log('🔄 DIRECT UPDATE: Set button text to All Months');
+                    } else {
+                        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                        const [year, month] = monthValue.split('-');
+                        const monthIndex = parseInt(month) - 1;
+                        const monthName = monthNames[monthIndex];
+                        selectedMonthTextElement.textContent = `${monthName} ${year}`;
+                        console.log(`🔄 DIRECT UPDATE: Set button text to ${monthName} ${year}`);
+                    }
                 }
                 
                 // Update current selection and apply filter
@@ -9209,13 +9291,18 @@ function initializeJoystick() {
                 
                 // DIRECT UPDATE: Force update the button text immediately
                 const selectedMonthTextElement = document.getElementById('selectedMonthText');
-                if (selectedMonthTextElement && monthValue !== 'all') {
-                    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                    const [year, month] = monthValue.split('-');
-                    const monthIndex = parseInt(month) - 1;
-                    const monthName = monthNames[monthIndex];
-                    selectedMonthTextElement.textContent = `${monthName} ${year}`;
-                    console.log(`🔄 DIRECT UPDATE: Set button text to ${monthName} ${year}`);
+                if (selectedMonthTextElement) {
+                    if (monthValue === 'all') {
+                        selectedMonthTextElement.textContent = 'All Months';
+                        console.log('🔄 DIRECT UPDATE: Set button text to All Months');
+                    } else {
+                        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                        const [year, month] = monthValue.split('-');
+                        const monthIndex = parseInt(month) - 1;
+                        const monthName = monthNames[monthIndex];
+                        selectedMonthTextElement.textContent = `${monthName} ${year}`;
+                        console.log(`🔄 DIRECT UPDATE: Set button text to ${monthName} ${year}`);
+                    }
                 }
                 
                 // Update current selection and apply filter
@@ -9232,6 +9319,10 @@ function initializeJoystick() {
 function closeSpiralModal() {
     if (spiralModal) {
         spiralModal.classList.remove('show');
+        
+        // Restore body scroll when modal is closed
+        document.body.style.overflow = '';
+        
         setTimeout(() => {
             if (spiralModal && spiralModal.parentNode) {
                 spiralModal.parentNode.removeChild(spiralModal);
