@@ -1238,6 +1238,9 @@
                     
                     // Check connectivity after login screen shows
                     checkConnectivityStatus();
+                    
+                    // Check PWA installation status after login screen is visible
+                    checkPWAInstallationStatus();
                 }, 1000); // Wait for fade-out animation to complete
                 
             }, 3000); // Show splash for 3 seconds
@@ -1295,6 +1298,20 @@
         // Listen for online/offline events
         window.addEventListener('online', checkConnectivityStatus);
         window.addEventListener('offline', checkConnectivityStatus);
+        
+        // Function to check and update PWA installation status
+        function checkPWAInstallationStatus() {
+            if (isPWAInstalled()) {
+                console.log('📱 PWA: App is installed - hiding install button');
+                hideInstallButton();
+            } else {
+                console.log('📱 PWA: App not installed - showing install button');
+                const installBtn = document.getElementById('installAppBtn');
+                if (installBtn) {
+                    installBtn.style.display = 'flex';
+                }
+            }
+        }
     </script>
     
     <!-- PWA Installation Script -->
@@ -1388,18 +1405,42 @@
             hideInstallButton();
         });
         
+        // Enhanced function to check if PWA is installed
+        function isPWAInstalled() {
+            // Check iOS standalone mode
+            if (window.navigator.standalone === true) {
+                return true;
+            }
+            
+            // Check Android/Desktop PWA display modes
+            if (window.matchMedia('(display-mode: standalone)').matches ||
+                window.matchMedia('(display-mode: minimal-ui)').matches ||
+                window.matchMedia('(display-mode: fullscreen)').matches) {
+                return true;
+            }
+            
+            // Check if launched from home screen (additional check)
+            if (window.matchMedia('(display-mode: browser)').matches === false) {
+                return true;
+            }
+            
+            return false;
+        }
+        
         // Check if already installed and hide button
         window.addEventListener('load', () => {
             setTimeout(() => {
-                // Temporarily disabled auto-hide for testing
-                // if (window.navigator.standalone === true || 
-                //     window.matchMedia('(display-mode: standalone)').matches ||
-                //     window.matchMedia('(display-mode: minimal-ui)').matches) {
-                //     console.log('📱 PWA: App is already installed');
-                //     hideInstallButton();
-                // } else {
-                    console.log('📱 PWA: Install button kept visible for testing');
-                // }
+                if (isPWAInstalled()) {
+                    console.log('📱 PWA: App is already installed - hiding install button');
+                    hideInstallButton();
+                } else {
+                    console.log('📱 PWA: App not installed - showing install button');
+                    // Ensure button is visible for non-installed users
+                    const installBtn = document.getElementById('installAppBtn');
+                    if (installBtn) {
+                        installBtn.style.display = 'flex';
+                    }
+                }
             }, 1000); // Wait for login screen to show
         });
     </script>
